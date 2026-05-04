@@ -1,0 +1,46 @@
+﻿# Unreal Engine project ignores
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# Plugin build output
+Plugins/*/Binaries/
+Plugins/*/Intermediate/
+
+# IDE / generated project files
+.vs/
+.idea/
+*.VC.db
+*.VC.opendb
+*.sln
+*.suo
+*.opensdf
+*.sdf
+
+# Build / packaging artifacts
+*.pdb
+*.obj
+*.o
+*.ilk
+*.exp
+*.lib
+*.dll
+*.exe
+
+# Logs and temp files
+*.log
+*.tmp
+*.cache
+
+# User-specific settings
+*.DotSettings.user
+
+# Python / misc tooling caches
+__pycache__/
+*.pyc
+
+# OS files
+Thumbs.db
+.DS_Store
+
