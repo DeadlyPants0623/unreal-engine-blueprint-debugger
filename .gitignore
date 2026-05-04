@@ -4,37 +4,34 @@ DerivedDataCache/
 Intermediate/
 Saved/
 
-# Plugin build output
+# Plugin generated folders
 Plugins/*/Binaries/
 Plugins/*/Intermediate/
 
-# IDE / generated project files
+# IDE / tool metadata
 .vs/
 .idea/
 *.VC.db
 *.VC.opendb
-*.sln
 *.suo
 *.opensdf
 *.sdf
 
-# Build / packaging artifacts
-*.pdb
-*.obj
-*.o
-*.ilk
-*.exp
-*.lib
-*.dll
-*.exe
-
-# Logs and temp files
-*.log
-*.tmp
-*.cache
+# Generated project files
+*.sln
+*.xcodeproj
+*.xcworkspace
 
 # User-specific settings
 *.DotSettings.user
+
+# Unreal local-only content
+Content/Developers/*
+
+# Logs and transient files
+*.log
+*.tmp
+*.cache
 
 # Python / misc tooling caches
 __pycache__/
@@ -43,4 +40,3 @@ __pycache__/
 # OS files
 Thumbs.db
 .DS_Store
-

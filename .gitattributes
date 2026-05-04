@@ -1,0 +1,29 @@
+﻿# Normalize text files to LF in repo; working tree line endings follow user Git settings
+* text=auto
+
+# Unreal binary assets
+*.uasset -text
+*.umap -text
+*.ubulk -text
+*.uptnl -text
+*.uexp -text
+*.ufont -text
+
+# Common binary media
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.bmp -text
+*.ico -text
+*.wav -text
+*.mp3 -text
+*.ogg -text
+*.fbx -text
+*.ttf -text
+*.otf -text
+
+# Archives / packaged data
+*.zip -text
+*.7z -text
+*.pak -text
+
