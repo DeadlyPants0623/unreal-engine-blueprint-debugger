@@ -9,6 +9,16 @@
 
 #include "ExecFlowGraph.generated.h"
 
+struct FExecFlowClusterVisual
+{
+	FString Key;
+	FString Label;
+	FLinearColor FillColor;
+	FLinearColor BorderColor;
+	FVector2D Min;
+	FVector2D Max;
+};
+
 // -----------------------------------------------------------------------
 //  Schema — minimal read-only schema so SGraphEditor is satisfied.
 // -----------------------------------------------------------------------
@@ -29,8 +39,13 @@ public:
 	virtual bool ShouldHidePinDefaultValue(UEdGraphPin* Pin) const override { return true; }
 
 	/** Read-only — ignore break requests. */
-	virtual void BreakPinLinks(UEdGraphPin& TargetPin, bool bSendsNodeNotification) const override {}
-	virtual void BreakSinglePinLink(UEdGraphPin* SourcePin, UEdGraphPin* TargetPin) const override {}
+	virtual void BreakPinLinks(UEdGraphPin& TargetPin, bool bSendsNodeNotification) const override
+	{
+	}
+
+	virtual void BreakSinglePinLink(UEdGraphPin* SourcePin, UEdGraphPin* TargetPin) const override
+	{
+	}
 };
 
 // -----------------------------------------------------------------------
@@ -65,7 +80,7 @@ public:
 	virtual bool ShowPaletteIconOnNode() const override { return false; }
 
 	/** Convenience accessors used during edge wiring. */
-	UEdGraphPin* GetInputPin()  const;
+	UEdGraphPin* GetInputPin() const;
 	/** Returns first output pin (fallback). */
 	UEdGraphPin* GetOutputPin() const;
 	/** Returns the output pin whose name matches the given compact route (e.g. "V", "T").
@@ -94,5 +109,6 @@ public:
 	 *       with lane choice driven by parent continuity.
 	 */
 	static bool PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& FlowMap);
-};
 
+	TArray<FExecFlowClusterVisual> ClusterVisuals;
+};

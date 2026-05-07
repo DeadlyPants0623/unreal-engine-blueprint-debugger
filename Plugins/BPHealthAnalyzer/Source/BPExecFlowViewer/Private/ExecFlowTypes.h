@@ -39,6 +39,7 @@ struct FExecFuncEntry
 struct FExecBPGroup
 {
 	FString BlueprintName;
+	FString ClusterBlueprintName;
 	int32 DepthColumn = 0;
 	TWeakObjectPtr<UBlueprint> SourceBlueprint;
 	TArray<FExecFuncEntry> Functions;

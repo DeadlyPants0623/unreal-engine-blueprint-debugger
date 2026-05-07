@@ -59,4 +59,7 @@ private:
 
 	int32 ForwardDepth = 4;
 	int32 BackwardDepth = 2;
+	
+	TSharedPtr<SOverlay> GraphOverlay;
+	TSharedPtr<SWidget> ClusterOverlay;
 };

@@ -9,7 +9,10 @@
 #include "Widgets/Text/STextBlock.h"
 #include "Styling/AppStyle.h"
 #include "GraphEditor.h"
+#include "SExecFlowClusterOverlay.h"
 #include "EdGraph/EdGraphNode.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogExecLocalPathWidget, Log, All);
 
 #define LOCTEXT_NAMESPACE "SExecLocalPathWidget"
 
@@ -53,12 +56,12 @@ void SExecLocalPathWidget::Construct(const FArguments& InArgs)
 					SNew(SSpinBox<int32>)
 					.Value_Lambda([this]() { return BackwardDepth; })
 					.MinValue(0)
-					.MaxValue(12)
+					.MaxValue(32)
 					.MinSliderValue(0)
-					.MaxSliderValue(12)
+					.MaxSliderValue(32)
 					.MinDesiredWidth(120.f)
 					.Delta(1)
-					.OnValueChanged_Lambda([this](int32 NewVal) { BackwardDepth = FMath::Clamp(NewVal, 0, 12); })
+					.OnValueChanged_Lambda([this](int32 NewVal) { BackwardDepth = FMath::Clamp(NewVal, 0, 32); })
 				]
 			]
 
@@ -84,12 +87,12 @@ void SExecLocalPathWidget::Construct(const FArguments& InArgs)
 					SNew(SSpinBox<int32>)
 					.Value_Lambda([this]() { return ForwardDepth; })
 					.MinValue(0)
-					.MaxValue(12)
+					.MaxValue(32)
 					.MinSliderValue(0)
-					.MaxSliderValue(12)
+					.MaxSliderValue(32)
 					.MinDesiredWidth(120.f)
 					.Delta(1)
-					.OnValueChanged_Lambda([this](int32 NewVal) { ForwardDepth = FMath::Clamp(NewVal, 0, 12); })
+					.OnValueChanged_Lambda([this](int32 NewVal) { ForwardDepth = FMath::Clamp(NewVal, 0, 32); })
 				]
 			]
 
@@ -162,6 +165,7 @@ void SExecLocalPathWidget::Rebuild()
 	UEdGraphNode* Node = TargetNode.Get();
 	if (!Node)
 	{
+		UE_LOG(LogExecLocalPathWidget, Warning, TEXT("Rebuild: No target node set"));
 		bHasError = true;
 		ErrorText = LOCTEXT("NoNode", "No node selected.");
 		if (GraphContainer.IsValid())
@@ -169,10 +173,18 @@ void SExecLocalPathWidget::Rebuild()
 		return;
 	}
 
+	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Tracing from node '%s' (Back=%d Fwd=%d)"),
+		*Node->GetNodeTitle(ENodeTitleType::FullTitle).ToString(), BackwardDepth, ForwardDepth);
+
 	// Trace local execution flow (same graph only)
 	FExecFlowMap FlowMap = FCrossBPExecTracer::TraceFromNode(Node, BackwardDepth, ForwardDepth);
+
+	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Trace returned %d groups, %d edges"),
+		FlowMap.Groups.Num(), FlowMap.Edges.Num());
+
 	if (FlowMap.Groups.Num() == 0)
 	{
+		UE_LOG(LogExecLocalPathWidget, Warning, TEXT("Rebuild: Trace produced no groups"));
 		bHasError = true;
 		ErrorText = LOCTEXT("NothingTraced", "Failed to trace execution flow from this node.");
 		if (GraphContainer.IsValid())
@@ -183,12 +195,16 @@ void SExecLocalPathWidget::Rebuild()
 	// Populate the flow graph
 	if (!UExecFlowGraph::PopulateGraph(FlowGraph, FlowMap))
 	{
+		UE_LOG(LogExecLocalPathWidget, Error, TEXT("Rebuild: PopulateGraph failed"));
 		bHasError = true;
 		ErrorText = LOCTEXT("PopulateFailed", "Failed to populate flow graph visualization.");
 		if (GraphContainer.IsValid())
 			GraphContainer->SetContent(CreateGraphEditorWidget());
 		return;
 	}
+
+	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Graph populated — %d nodes, %d clusters"),
+		FlowGraph->Nodes.Num(), FlowGraph->ClusterVisuals.Num());
 
 	// Refresh the SGraphEditor
 	if (GraphContainer.IsValid())
@@ -202,10 +218,14 @@ TSharedRef<SWidget> SExecLocalPathWidget::CreateGraphEditorWidget()
 {
 	if (!FlowGraph)
 	{
+		UE_LOG(LogExecLocalPathWidget, Error, TEXT("CreateGraphEditorWidget: FlowGraph is null"));
 		return SNew(STextBlock)
 			.Text(LOCTEXT("NoGraph", "Graph not initialized."))
 			.ColorAndOpacity(FLinearColor::Red);
 	}
+
+	UE_LOG(LogExecLocalPathWidget, Log, TEXT("CreateGraphEditorWidget: Building overlay — %d clusters in FlowGraph"),
+		FlowGraph->ClusterVisuals.Num());
 
 	FGraphAppearanceInfo Appearance;
 	Appearance.CornerText = LOCTEXT("CornerLabel", "Execution Flow");
@@ -216,7 +236,27 @@ TSharedRef<SWidget> SExecLocalPathWidget::CreateGraphEditorWidget()
 		.Appearance(Appearance)
 		.GraphToEdit(FlowGraph);
 
-	return GraphEditor.ToSharedRef();
+	// ✅ Layer order: graph editor first (bottom), cluster overlay second (on top).
+	// SOverlay draws later slots on top of earlier ones.
+	// Cluster overlay uses semi-transparent fill so nodes below remain visible.
+	SAssignNew(GraphOverlay, SOverlay)
+
+	// Layer 0: graph editor (bottom — nodes, wires, background)
+	+ SOverlay::Slot()
+	[
+		GraphEditor.ToSharedRef()
+	]
+
+	// Layer 1: cluster backgrounds on top (semi-transparent tinted regions)
+	+ SOverlay::Slot()
+	[
+		SNew(SExecFlowClusterOverlay)
+			.FlowGraph(FlowGraph)
+			.GraphEditorWidget(GraphEditor)
+		.Visibility(EVisibility::HitTestInvisible)
+	];
+
+	return GraphOverlay.ToSharedRef();
 }
 
 void SExecLocalPathWidget::PostProcessWithGraphEditor()
