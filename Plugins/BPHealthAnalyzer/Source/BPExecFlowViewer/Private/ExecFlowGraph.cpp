@@ -781,23 +781,44 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 				}
 			}
 
-			int32 DesiredLane = StartLane + i;
-			if (ParentLanes.Num() > 0)
+		int32 DesiredLane = StartLane + i;
+		if (ParentLanes.Num() > 0)
+		{
+			ParentLanes.Sort();
+			const int32 Mid = ParentLanes.Num() / 2;
+			if ((ParentLanes.Num() % 2) == 1)
 			{
-				ParentLanes.Sort();
-				const int32 Mid = ParentLanes.Num() / 2;
-				if ((ParentLanes.Num() % 2) == 1)
-				{
-					DesiredLane = ParentLanes[Mid];
-				}
-				else
-				{
-					DesiredLane = FMath::RoundToInt(0.5f * static_cast<float>(ParentLanes[Mid - 1] + ParentLanes[Mid]));
-				}
+				DesiredLane = ParentLanes[Mid];
 			}
+			else
+			{
+				DesiredLane = FMath::RoundToInt(0.5f * static_cast<float>(ParentLanes[Mid - 1] + ParentLanes[Mid]));
+			}
+		}
 
-			const int32 Lane = FindNearestFreeLane(DesiredLane, UsedLanes);
-			NodeToLane.Add(NodeIdx, Lane);
+		// Cross-BP Call target override: if this node is the destination of a cross-BP "Call"
+		// edge, anchor it to lane 0 regardless of the callers' lanes.  This forces the Call
+		// wire to arc diagonally rather than running flat through same-lane intermediate nodes
+		// that sit between the caller and the callee in X space.
+		for (const FExecFlowEdge& E : RenderEdges)
+		{
+			if (E.ToIdx != NodeIdx) continue;
+			if (E.RouteLabel != TEXT("Call")) continue;
+			if (!RenderGroups.IsValidIndex(E.FromIdx) || !RenderGroups.IsValidIndex(E.ToIdx)) continue;
+			if (RenderGroups[E.FromIdx].BlueprintName != RenderGroups[E.ToIdx].BlueprintName)
+			{
+				UE_LOG(LogExecFlowGraph, Verbose,
+					TEXT("LaneOverride: NodeIdx=%d ('%s') is cross-BP Call target — forcing DesiredLane 0 (was %d)"),
+					NodeIdx,
+					RenderGroups.IsValidIndex(NodeIdx) ? *RenderGroups[NodeIdx].BlueprintName : TEXT("?"),
+					DesiredLane);
+				DesiredLane = 0;
+				break;
+			}
+		}
+
+		const int32 Lane = FindNearestFreeLane(DesiredLane, UsedLanes);
+		NodeToLane.Add(NodeIdx, Lane);
 		}
 	}
 
@@ -1047,6 +1068,29 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 		UE_LOG(LogExecFlowGraph, Verbose,
 		       TEXT("PopulateGraph: Refit cluster '%s' -> Min=(%.1f, %.1f) Max=(%.1f, %.1f) Members=%d"),
 		       *Visual.Key, Visual.Min.X, Visual.Min.Y, Visual.Max.X, Visual.Max.Y, Members->Num());
+	}
+
+	// Y-normalization pass: expand every cluster overlay to the shared global Y range.
+	// Clusters at different Y-lanes (e.g. BP_A at lane 0, BP_B at lane 1) would otherwise
+	// have different top/bottom edges, making one cluster banner appear higher/lower than
+	// the others. Sharing the same Y extent gives a uniform horizontal-band appearance.
+	if (Graph->ClusterVisuals.Num() > 1)
+	{
+		double GlobalMinY =  DBL_MAX;
+		double GlobalMaxY = -DBL_MAX;
+		for (const FExecFlowClusterVisual& V : Graph->ClusterVisuals)
+		{
+			GlobalMinY = FMath::Min(GlobalMinY, V.Min.Y);
+			GlobalMaxY = FMath::Max(GlobalMaxY, V.Max.Y);
+		}
+		UE_LOG(LogExecFlowGraph, Log,
+			TEXT("YNormalize: GlobalMinY=%.1f GlobalMaxY=%.1f — applying to %d clusters"),
+			GlobalMinY, GlobalMaxY, Graph->ClusterVisuals.Num());
+		for (FExecFlowClusterVisual& V : Graph->ClusterVisuals)
+		{
+			V.Min.Y = GlobalMinY;
+			V.Max.Y = GlobalMaxY;
+		}
 	}
 
 	// Final separation pass: prevent cross-blueprint cluster overlap after refit.

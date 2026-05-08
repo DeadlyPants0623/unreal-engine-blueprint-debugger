@@ -9,6 +9,7 @@
 #include "K2Node_CustomEvent.h"
 #include "K2Node_Event.h"
 #include "K2Node_FunctionEntry.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogBPExecFlowTracer, Log, All);
 
@@ -87,6 +88,37 @@ namespace
 		{
 			if (FMath::Abs(Depth) < FMath::Abs(Existing->Depth))
 			{
+				Existing->Depth = Depth;
+			}
+			return;
+		}
+
+		FNodeMeta Meta;
+		Meta.Depth = Depth;
+		NodeMeta.Add(Node, MoveTemp(Meta));
+	}
+
+	// Backward-pass variant: the MOST NEGATIVE depth wins.
+	// Cross-BP resolution initially assigns call sites depth=-1, but the same-graph
+	// BFS may later discover that a call site is actually 3+ hops back. We must allow
+	// those deeper (more negative) depths to overwrite the shallow initial assignment.
+	void AddOrUpdateNodeMetaBackward(
+		TMap<UEdGraphNode*, FNodeMeta>& NodeMeta,
+		UEdGraphNode* Node,
+		int32 Depth)
+	{
+		if (!Node)
+		{
+			return;
+		}
+
+		if (FNodeMeta* Existing = NodeMeta.Find(Node))
+		{
+			if (Depth < Existing->Depth)
+			{
+				UE_LOG(LogBPExecFlowTracer, Verbose,
+					TEXT("NodeMeta depth updated (backward): Node='%s' OldDepth=%d NewDepth=%d"),
+					*NodeDisplayName(Node), Existing->Depth, Depth);
 				Existing->Depth = Depth;
 			}
 			return;
@@ -183,37 +215,6 @@ namespace
 			return DefaultBlueprint ? DefaultBlueprint->GetName() : TEXT("UnknownBP");
 		}
 
-		if (const UK2Node_CallFunction* CallFunctionNode = Cast<UK2Node_CallFunction>(Node))
-		{
-			const UEdGraphPin* SelfPin = CallFunctionNode->FindPin(UEdGraphSchema_K2::PN_Self);
-			const UEdGraphPin* TargetPin = SelfPin ? SelfPin : CallFunctionNode->FindPin(TEXT("Target"));
-			if (const UClass* TargetClass = ResolvePinOwnerClass(TargetPin))
-			{
-				if (UBlueprint* TargetBlueprint = GetBlueprintFromClass(TargetClass))
-				{
-					OutOwnerBlueprint = TargetBlueprint;
-					return TargetBlueprint->GetName();
-				}
-
-				// return TargetClass->GetName();
-			}
-
-			if (const UFunction* TargetFunction = CallFunctionNode->GetTargetFunction())
-			{
-				if (const UClass* OwnerClass = TargetFunction->GetOwnerClass())
-				{
-					if (UBlueprint* OwnerBlueprint = GetBlueprintFromClass(OwnerClass))
-					{
-						OutOwnerBlueprint = OwnerBlueprint;
-						return OwnerBlueprint->GetName();
-					}
-
-					// Native/non-blueprint owners still get an accurate title.
-					// return OwnerClass->GetName();
-				}
-			}
-		}
-
 		if (const UEdGraph* NodeGraph = Node->GetGraph())
 		{
 			if (UBlueprint* GraphBlueprint = NodeGraph->GetTypedOuter<UBlueprint>())
@@ -284,6 +285,56 @@ namespace
 
 		return nullptr;
 	}
+
+	// Maps: OwnerBlueprint* -> TArray of (CallerNode, CallerBlueprint) pairs
+	// that contain a CallFunction node targeting a function in OwnerBlueprint.
+	struct FCallerRecord
+	{
+		UK2Node_CallFunction* CallerNode = nullptr;
+		UBlueprint* CallerBlueprint = nullptr;
+	};
+
+	TMap<UBlueprint*, TArray<FCallerRecord>> BuildCallerIndex(UBlueprint* OwnerBP)
+	{
+		TMap<UBlueprint*, TArray<FCallerRecord>> Index;
+		if (!OwnerBP) return Index;
+
+		FAssetRegistryModule& AssetRegistry =
+			FModuleManager::LoadModuleChecked<FAssetRegistryModule>("AssetRegistry");
+
+		TArray<FAssetData> BlueprintAssets;
+		AssetRegistry.Get().GetAssetsByClass(
+			UBlueprint::StaticClass()->GetClassPathName(), BlueprintAssets);
+
+		for (const FAssetData& AssetData : BlueprintAssets)
+		{
+			UBlueprint* BP = Cast<UBlueprint>(AssetData.GetAsset());
+			if (!BP || BP == OwnerBP) continue;
+
+			TArray<UEdGraph*> AllGraphs;
+			BP->GetAllGraphs(AllGraphs);
+
+			for (UEdGraph* Graph : AllGraphs)
+			{
+				if (!Graph) continue;
+				for (UEdGraphNode* Node : Graph->Nodes)
+				{
+					UK2Node_CallFunction* CallNode = Cast<UK2Node_CallFunction>(Node);
+					if (!CallNode) continue;
+
+					const UFunction* Func = CallNode->GetTargetFunction();
+					if (!Func) continue;
+
+					const UClass* OwnerClass = Func->GetOwnerClass();
+					UBlueprint* TargetBP = GetBlueprintFromClass(OwnerClass);
+					if (TargetBP != OwnerBP) continue;
+
+					Index.FindOrAdd(OwnerBP).Add({CallNode, BP});
+				}
+			}
+		}
+		return Index;
+	}
 } // namespace
 
 FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32 BackwardDepth, int32 ForwardDepth)
@@ -330,6 +381,8 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 	int32 BackwardCrossGraphSkips = 0;
 	int32 BackwardEdgesAdded = 0;
 	int32 BackwardEnqueued = 0;
+	int32 BackwardCrossBPAttempts = 0;
+	int32 BackwardCrossBPSuccesses = 0;
 
 	AddOrUpdateNodeMeta(NodeMeta, SelectedNode, 0);
 
@@ -367,6 +420,8 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 				{
 					UEdGraphNode* Next = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
 					if (!Next) continue;
+					
+					if (Next->GetGraph() != Current.Node->GetGraph()) continue;
 
 					// Same graph - normal traversal
 					if (Next->GetGraph() == Current.Node->GetGraph())
@@ -416,7 +471,9 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 					{
 						++ForwardCrossBPNoTargetBPSkips;
 						UE_LOG(LogBPExecFlowTracer, Verbose,
-						       TEXT("Forward cross-BP skip: unable to resolve target Blueprint for call '%s' in node '%s'"),
+						       TEXT(
+							       "Forward cross-BP skip: unable to resolve target Blueprint for call '%s' in node '%s'"
+						       ),
 						       *NodeDisplayName(CallNode),
 						       *NodeDisplayName(Current.Node));
 					}
@@ -444,14 +501,16 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 							if (Edges.Num() > EdgeCountBefore)
 								++ForwardCrossBPSuccesses;
 							UE_LOG(LogBPExecFlowTracer, Verbose,
-								   TEXT("Forward cross-BP skip: already visited entry node '%s' in Blueprint '%s' via call '%s' (edge added)"),
-								   *NodeDisplayName(EntryNode),
-								   *GetNameSafe(TargetBP),
-								   *NodeDisplayName(CallNode));
+							       TEXT(
+								       "Forward cross-BP skip: already visited entry node '%s' in Blueprint '%s' via call '%s' (edge added)"
+							       ),
+							       *NodeDisplayName(EntryNode),
+							       *GetNameSafe(TargetBP),
+							       *NodeDisplayName(CallNode));
 						}
 						else
 						{
-							VisitedEntryNodes.Add(EntryNode);  // ← marks EntryNode, not the caller
+							VisitedEntryNodes.Add(EntryNode); // ← marks EntryNode, not the caller
 
 							const FString CallRoute = TEXT("Call");
 							const int32 EdgeCountBefore = Edges.Num();
@@ -490,13 +549,43 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 		       VisitedEntryNodes.Num());
 	}
 
-	// Upstream traversal: prev -> current
+	// Upstream traversal: prev -> current (with cross-BP caller resolution)
 	if (BackwardDepth > 0)
 	{
+		// Build reverse caller index from all in-memory Blueprints.
+		// Key: target UBlueprint → list of (CallFunction node, caller BP) pairs that call into it.
+		TMap<UBlueprint*, TArray<FCallerRecord>> CallerIndex;
+		for (TObjectIterator<UBlueprint> It; It; ++It)
+		{
+			UBlueprint* BP = *It;
+			if (!BP) continue;
+
+			TArray<UEdGraph*> AllGraphs;
+			BP->GetAllGraphs(AllGraphs);
+
+			for (UEdGraph* Graph : AllGraphs)
+			{
+				if (!Graph) continue;
+				for (UEdGraphNode* Node : Graph->Nodes)
+				{
+					UK2Node_CallFunction* CallNode = Cast<UK2Node_CallFunction>(Node);
+					if (!CallNode) continue;
+
+					const UFunction* Func = CallNode->GetTargetFunction();
+					if (!Func) continue;
+
+					UBlueprint* TargetBP = GetBlueprintFromClass(Func->GetOwnerClass());
+					if (!TargetBP) continue;
+
+					CallerIndex.FindOrAdd(TargetBP).Add({CallNode, BP});
+				}
+			}
+		}
+
 		TArray<FTraversalItem> Queue;
 		TMap<UEdGraphNode*, int32> BestDepth;
+		TSet<UEdGraphNode*> VisitedEntryNodes;
 
-		// FIX 1: pass OwnerBP as initial context
 		Queue.Add({SelectedNode, 0, OwnerBP});
 		BestDepth.Add(SelectedNode, 0);
 
@@ -507,12 +596,11 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 			if (!Current.Node || FMath::Abs(Current.Depth) >= BackwardDepth)
 			{
 				if (Current.Node && FMath::Abs(Current.Depth) >= BackwardDepth)
-				{
 					++BackwardDepthLimitedSkips;
-				}
 				continue;
 			}
 
+			// --- Same-graph exec-pin walk (unchanged) ---
 			for (UEdGraphPin* InPin : Current.Node->Pins)
 			{
 				if (!IsExecPin(InPin, EGPD_Input)) continue;
@@ -522,7 +610,6 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 					UEdGraphNode* Prev = LinkedPin ? LinkedPin->GetOwningNode() : nullptr;
 					if (!Prev) continue;
 
-					// FIX 3: explicit skip instead of RootGraph hard block
 					if (Prev->GetGraph() != Current.Node->GetGraph())
 					{
 						++BackwardCrossGraphSkips;
@@ -530,27 +617,111 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 					}
 
 					const FString RouteLabel = NormalizeRouteLabel(LinkedPin->GetDisplayName().ToString());
+
 					const int32 EdgeCountBefore = Edges.Num();
 					AddEdgeUnique(Edges, EdgeKeys, Prev, Current.Node, RouteLabel);
 					if (Edges.Num() > EdgeCountBefore)
 					{
 						++BackwardEdgesAdded;
+						UE_LOG(LogBPExecFlowTracer, Verbose,
+							TEXT("Backward edge recorded: Prev='%s'(graph='%s') -> Current='%s'(graph='%s') Route='%s'"),
+							*NodeDisplayName(Prev), *GetNameSafe(Prev->GetGraph()),
+							*NodeDisplayName(Current.Node), *GetNameSafe(Current.Node->GetGraph()),
+							*RouteLabel);
 					}
-					AddOrUpdateNodeMeta(NodeMeta, Prev, Current.Depth - 1);
 
 					const int32 PrevDepth = Current.Depth - 1;
-					const int32 ExistingDepth = BestDepth.FindRef(Prev);
-					if (!BestDepth.Contains(Prev) || FMath::Abs(PrevDepth) < FMath::Abs(ExistingDepth))
+					AddOrUpdateNodeMetaBackward(NodeMeta, Prev, PrevDepth);
+
+					if (!BestDepth.Contains(Prev) || PrevDepth < BestDepth.FindRef(Prev))
 					{
 						BestDepth.Add(Prev, PrevDepth);
 						Queue.Add({Prev, PrevDepth, Current.ContextBlueprint});
 						++BackwardEnqueued;
 						UE_LOG(LogBPExecFlowTracer, VeryVerbose,
-						       TEXT("Backward enqueue: From='%s' To='%s' Depth=%d Route='%s'"),
-						       *NodeDisplayName(Prev),
-						       *NodeDisplayName(Current.Node),
-						       PrevDepth,
-						       *RouteLabel);
+						       TEXT("Backward enqueue: From='%s'(depth=%d) To='%s'(depth=%d) Route='%s'"),
+						       *NodeDisplayName(Prev), PrevDepth, *NodeDisplayName(Current.Node), Current.Depth, *RouteLabel);
+					}
+				}
+			}
+
+			// --- NEW: cross-BP "who calls me?" resolution ---
+			// When we reach an entry point, find all external callers.
+			const bool bIsEntry = Current.Node->IsA<UK2Node_FunctionEntry>()
+				|| Current.Node->IsA<UK2Node_CustomEvent>()
+				|| Current.Node->IsA<UK2Node_Event>();
+
+			if (bIsEntry && !VisitedEntryNodes.Contains(Current.Node))
+			{
+				VisitedEntryNodes.Add(Current.Node);
+
+				UEdGraph* EntryGraph = Current.Node->GetGraph();
+				UBlueprint* EntryBP = EntryGraph ? EntryGraph->GetTypedOuter<UBlueprint>() : nullptr;
+				if (!EntryBP) EntryBP = Current.ContextBlueprint;
+
+				// Determine the function name this entry represents
+				FName EntryFunctionName = NAME_None;
+				if (const UK2Node_FunctionEntry* FuncEntry = Cast<UK2Node_FunctionEntry>(Current.Node))
+				{
+					if (EntryGraph) EntryFunctionName = EntryGraph->GetFName();
+				}
+				else if (const UK2Node_CustomEvent* CustomEvent = Cast<UK2Node_CustomEvent>(Current.Node))
+				{
+					EntryFunctionName = CustomEvent->CustomFunctionName;
+				}
+				else if (const UK2Node_Event* EventNode = Cast<UK2Node_Event>(Current.Node))
+				{
+					EntryFunctionName = EventNode->GetFunctionName();
+				}
+
+				if (const TArray<FCallerRecord>* Callers = CallerIndex.Find(EntryBP))
+				{
+					for (const FCallerRecord& Record : *Callers)
+					{
+						if (!Record.CallerNode || !Record.CallerBlueprint) continue;
+
+						// Confirm this call targets the specific function
+						const UFunction* CalledFunc = Record.CallerNode->GetTargetFunction();
+						const FName CalledFuncName = CalledFunc ? CalledFunc->GetFName() : NAME_None;
+						if (!EntryFunctionName.IsNone() && CalledFuncName != EntryFunctionName) continue;
+
+						const int32 CallerDepth = Current.Depth - 1;
+
+						// Allow re-assignment if we now have a more-negative depth for this caller.
+						// The initial cross-BP assignment is a shallow estimate (-1); the real depth
+						// may be discovered later when the same-graph BFS cascades back through
+						// intermediate nodes (e.g. call#1 is truly at -3, not -1).
+						if (BestDepth.Contains(Record.CallerNode))
+						{
+							const int32 ExistingDepth = BestDepth.FindRef(Record.CallerNode);
+							if (CallerDepth >= ExistingDepth)
+							{
+								UE_LOG(LogBPExecFlowTracer, VeryVerbose,
+									TEXT("Backward cross-BP skip (same/shallower): Caller='%s' ExistingDepth=%d CallerDepth=%d"),
+									*NodeDisplayName(Record.CallerNode), ExistingDepth, CallerDepth);
+								continue;
+							}
+							UE_LOG(LogBPExecFlowTracer, Verbose,
+								TEXT("Backward cross-BP re-assign: Caller='%s' OldDepth=%d NewDepth=%d"),
+								*NodeDisplayName(Record.CallerNode), ExistingDepth, CallerDepth);
+						}
+
+						const int32 EdgeCountBefore = Edges.Num();
+						AddEdgeUnique(Edges, EdgeKeys, Record.CallerNode, Current.Node, TEXT("Call"));
+						if (Edges.Num() > EdgeCountBefore)
+							++BackwardEdgesAdded;
+
+						AddOrUpdateNodeMetaBackward(NodeMeta, Record.CallerNode, CallerDepth);
+						NodeCallerBlueprint.FindOrAdd(Record.CallerNode) = Record.CallerBlueprint;
+
+						BestDepth.Add(Record.CallerNode, CallerDepth);
+						Queue.Add({Record.CallerNode, CallerDepth, Record.CallerBlueprint});
+						++BackwardEnqueued;
+
+						UE_LOG(LogBPExecFlowTracer, Verbose,
+						       TEXT("Backward cross-BP: Caller='%s'(depth=%d) in BP='%s' -> Entry='%s'(depth=%d) in BP='%s'"),
+						       *NodeDisplayName(Record.CallerNode), CallerDepth, *GetNameSafe(Record.CallerBlueprint),
+						       *NodeDisplayName(Current.Node), Current.Depth, *GetNameSafe(EntryBP));
 					}
 				}
 			}
@@ -558,11 +729,8 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 
 		UE_LOG(LogBPExecFlowTracer, Log,
 		       TEXT("Backward traversal: Processed=%d DepthLimited=%d CrossGraphSkips=%d EdgesAdded=%d Enqueued=%d"),
-		       BackwardQueueProcessed,
-		       BackwardDepthLimitedSkips,
-		       BackwardCrossGraphSkips,
-		       BackwardEdgesAdded,
-		       BackwardEnqueued);
+		       BackwardQueueProcessed, BackwardDepthLimitedSkips, BackwardCrossGraphSkips,
+		       BackwardEdgesAdded, BackwardEnqueued);
 	}
 
 	if (NodeMeta.Num() == 0)
@@ -646,15 +814,57 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 	}
 
 	Result.RootGroupIndex = NodeToGroup.FindRef(SelectedNode);
+	
+	UE_LOG(LogBPExecFlowTracer, Log, TEXT("---- Edge Filter Pass: %d raw edges ----"), Edges.Num());
 
 	for (const FEdgeRecord& Edge : Edges)
 	{
 		const int32* FromIdx = NodeToGroup.Find(Edge.From);
 		const int32* ToIdx = NodeToGroup.Find(Edge.To);
-		if (!FromIdx || !ToIdx || *FromIdx == *ToIdx)
+
+		if (!FromIdx || !ToIdx)
 		{
+			UE_LOG(LogBPExecFlowTracer, Verbose,
+				TEXT("EdgeFilter DROP (no group): From='%s' To='%s' Route='%s' FromIdx=%s ToIdx=%s"),
+				*NodeDisplayName(Edge.From), *NodeDisplayName(Edge.To), *Edge.Route,
+				FromIdx ? *FString::FromInt(*FromIdx) : TEXT("null"),
+				ToIdx  ? *FString::FromInt(*ToIdx)  : TEXT("null"));
 			continue;
 		}
+
+		if (*FromIdx == *ToIdx)
+		{
+			UE_LOG(LogBPExecFlowTracer, Verbose,
+				TEXT("EdgeFilter DROP (self-loop): From='%s' To='%s' Route='%s' Idx=%d"),
+				*NodeDisplayName(Edge.From), *NodeDisplayName(Edge.To), *Edge.Route, *FromIdx);
+			continue;
+		}
+
+		const int32 FromDepth = Result.Groups[*FromIdx].DepthColumn;
+		const int32 ToDepth   = Result.Groups[*ToIdx].DepthColumn;
+		const FString& FromBP = Result.Groups[*FromIdx].BlueprintName;
+		const FString& ToBP   = Result.Groups[*ToIdx].BlueprintName;
+		const bool bCrossBP   = (FromBP != ToBP);
+
+		// Suppress backwards-pointing edges ONLY when they cross Blueprint boundaries.
+		// Intra-BP "backwards" depth edges are valid: they represent exec continuing after
+		// a call returns (e.g. FUNC_C_TRUE_call → Switch in the same graph).
+		if (bCrossBP && Edge.Route != TEXT("Call") && FromDepth > ToDepth)
+		{
+			UE_LOG(LogBPExecFlowTracer, Verbose,
+				TEXT("EdgeFilter DROP (cross-BP backwards): From='%s'(%s,depth=%d) To='%s'(%s,depth=%d) Route='%s'"),
+				*NodeDisplayName(Edge.From), *FromBP, FromDepth,
+				*NodeDisplayName(Edge.To),   *ToBP,   ToDepth,
+				*Edge.Route);
+			continue;
+		}
+
+		UE_LOG(LogBPExecFlowTracer, Verbose,
+			TEXT("EdgeFilter KEEP: From='%s'(%s,depth=%d) To='%s'(%s,depth=%d) Route='%s' CrossBP=%d"),
+			*NodeDisplayName(Edge.From), *FromBP, FromDepth,
+			*NodeDisplayName(Edge.To),   *ToBP,   ToDepth,
+			*Edge.Route, bCrossBP ? 1 : 0);
+
 		Result.Edges.AddUnique(FExecFlowEdge{*FromIdx, *ToIdx, Edge.Route});
 	}
 
