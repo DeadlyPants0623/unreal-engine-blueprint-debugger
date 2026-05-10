@@ -14,6 +14,12 @@ public:
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
 
+	/** Convenience accessor — valid between StartupModule and ShutdownModule. */
+	static FBPExecFlowViewerModule& Get()
+	{
+		return FModuleManager::GetModuleChecked<FBPExecFlowViewerModule>("BPExecFlowViewer");
+	}
+
 private:
 	void RegisterMenuExtensions();
 	void BuildContextMenuSection(UToolMenu* Menu);
@@ -23,4 +29,3 @@ private:
 private:
 	TWeakPtr<SExecLocalPathWidget> ViewerWidgetPtr;
 };
-

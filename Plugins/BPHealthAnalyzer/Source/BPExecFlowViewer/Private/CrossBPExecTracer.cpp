@@ -1,4 +1,5 @@
 ﻿#include "CrossBPExecTracer.h"
+#include "BPExecFlowViewer.h"
 
 #include "EdGraph/EdGraph.h"
 #include "EdGraph/EdGraphNode.h"
@@ -806,6 +807,7 @@ FExecFlowMap FCrossBPExecTracer::TraceFromNode(UEdGraphNode* SelectedNode, int32
 			if (IsPrimary(A) != IsPrimary(B)) return IsPrimary(A);
 			return A < B;
 		});
+
 
 		Group.Functions.Add(MoveTemp(Entry));
 

@@ -1,6 +1,9 @@
 ﻿#include "SExecLocalPathWidget.h"
 #include "CrossBPExecTracer.h"
 #include "ExecFlowGraph.h"
+#include "BPExecFlowViewer.h"
+
+#include "Engine/Blueprint.h"
 
 #include "Widgets/SBoxPanel.h"
 #include "Widgets/Layout/SBorder.h"
@@ -151,6 +154,7 @@ void SExecLocalPathWidget::SetTargetNode(UEdGraphNode* InNode)
 // -----------------------------------------------------------------------
 SExecLocalPathWidget::~SExecLocalPathWidget()
 {
+
 	FlowGraph = nullptr;
 }
 
@@ -206,8 +210,7 @@ void SExecLocalPathWidget::Rebuild()
 	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Graph populated — %d nodes, %d clusters"),
 		FlowGraph->Nodes.Num(), FlowGraph->ClusterVisuals.Num());
 
-	// Refresh the SGraphEditor
-	if (GraphContainer.IsValid())
+	// Refresh the SGraphEditor	if (GraphContainer.IsValid())
 	{
 		GraphContainer->SetContent(CreateGraphEditorWidget());
 		PostProcessWithGraphEditor();
@@ -310,6 +313,7 @@ EVisibility SExecLocalPathWidget::GetErrorVisibility() const
 {
 	return bHasError ? EVisibility::Visible : EVisibility::Collapsed;
 }
+
 
 // -----------------------------------------------------------------------
 //  Controls

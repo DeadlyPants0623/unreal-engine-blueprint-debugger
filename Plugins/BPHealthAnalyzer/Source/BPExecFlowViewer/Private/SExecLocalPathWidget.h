@@ -48,18 +48,19 @@ private:
 
 	FReply OnRebuildClicked();
 
-	// ---- Members ---
-	TObjectPtr<UExecFlowGraph>  FlowGraph;
-	TSharedPtr<SBox>            GraphContainer;
-	TSharedPtr<SGraphEditor>    GraphEditor;
+	// ---- Members ----
+	TObjectPtr<UExecFlowGraph>   FlowGraph;
+	TSharedPtr<SBox>             GraphContainer;
+	TSharedPtr<SGraphEditor>     GraphEditor;
 	TWeakObjectPtr<UEdGraphNode> TargetNode;
 	
 	FText ErrorText;
-	bool bHasError = false;
+	bool  bHasError = false;
 
-	int32 ForwardDepth = 4;
+	int32 ForwardDepth  = 4;
 	int32 BackwardDepth = 2;
 	
 	TSharedPtr<SOverlay> GraphOverlay;
-	TSharedPtr<SWidget> ClusterOverlay;
+	TSharedPtr<SWidget>  ClusterOverlay;
+
 };

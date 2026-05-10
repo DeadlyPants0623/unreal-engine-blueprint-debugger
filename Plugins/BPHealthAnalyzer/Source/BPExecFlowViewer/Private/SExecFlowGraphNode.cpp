@@ -7,8 +7,6 @@
 #include "Styling/AppStyle.h"
 #include "Kismet2/KismetEditorUtilities.h"
 
-// (no file-local helpers needed — route labels moved to output pins)
-
 // -----------------------------------------------------------------------
 //  SExecFlowGraphNode
 // -----------------------------------------------------------------------
@@ -32,8 +30,8 @@ void SExecFlowGraphNode::UpdateGraphNode()
 
 	const FLinearColor TitleColor = ExecNode->GetNodeTitleColor();
 
-	// With per-function grouping each group normally has exactly one entry.
-	// Build the single function row (or an empty placeholder).
+	// Build function rows. Pass EntryIndex — BuildFuncRow captures it via a weak node
+	// pointer so all heat colours are evaluated live each repaint (no rebuild needed).
 	TSharedPtr<SWidget> FuncContent;
 	if (Group.Functions.Num() > 0)
 	{
@@ -56,7 +54,7 @@ void SExecFlowGraphNode::UpdateGraphNode()
 			.ColorAndOpacity(FSlateColor(FLinearColor(0.5f, 0.5f, 0.5f)));
 	}
 
-	// ---- Outer node widget (matches the sketch: BP label on top, function card inside) ----
+	// ---- Outer node widget ----
 	GetOrAddSlot(ENodeZone::Center)
 	.HAlign(HAlign_Fill)
 	.VAlign(VAlign_Center)
@@ -79,7 +77,7 @@ void SExecFlowGraphNode::UpdateGraphNode()
 			[
 				SNew(SVerticalBox)
 
-				// ---- BP name header (outer container label, like the sketch) ----
+				// BP name header
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				[
@@ -95,7 +93,7 @@ void SExecFlowGraphNode::UpdateGraphNode()
 					]
 				]
 
-				// ---- Function card (inner box, like the inner rounded rect in the sketch) ----
+				// Function card
 				+ SVerticalBox::Slot()
 				.AutoHeight()
 				.Padding(6.f, 5.f, 6.f, 7.f)
@@ -122,7 +120,7 @@ void SExecFlowGraphNode::UpdateGraphNode()
 
 TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry)
 {
-	// Kind icon
+	// ---- Static data ----
 	FString KindIcon;
 	switch (Entry.Kind)
 	{
@@ -137,76 +135,55 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 	FString DisplayName = Entry.DisplayName.IsEmpty() ? Entry.FunctionName.ToString() : Entry.DisplayName;
 	if (Entry.bIsCycleTruncated) DisplayName = TEXT("(!) ") + DisplayName;
 
-	// Text colour — function name is the main visual focus now
-	FSlateColor NameColor = FSlateColor(FLinearColor(0.95f, 0.95f, 0.95f));
-	FSlateColor NodeIconColor = FSlateColor(FLinearColor(0.55f, 0.55f, 0.55f));
-	if (Entry.Kind == EExecNodeKind::Macro)
-	{
-		NameColor = FSlateColor(FLinearColor(0.60f, 0.60f, 0.60f));
-		NodeIconColor = NameColor;
-	}
-	if (Entry.Kind == EExecNodeKind::EventDispatcher)
-	{
-		NameColor = FSlateColor(FLinearColor(0.40f, 0.90f, 1.00f));
-		NodeIconColor = NameColor;
-	}
-	if (Entry.Kind == EExecNodeKind::ExecStep)
-	{
-		NameColor = FSlateColor(FLinearColor(0.78f, 0.78f, 0.78f));
-		NodeIconColor = NameColor;
-	}
-	if (Entry.bIsRoot)
-	{
-		NameColor = FSlateColor(FLinearColor(1.00f, 0.95f, 0.50f));
-	}
-	if (Entry.bIsCycleTruncated)
-	{
-		NameColor = FSlateColor(FLinearColor(1.00f, 0.45f, 0.20f));
-		NodeIconColor = NameColor;
-	}
+	FLinearColor NameColor(0.95f, 0.95f, 0.95f);
+	if (Entry.Kind == EExecNodeKind::Macro)           NameColor = FLinearColor(0.60f, 0.60f, 0.60f);
+	if (Entry.Kind == EExecNodeKind::EventDispatcher) NameColor = FLinearColor(0.40f, 0.90f, 1.00f);
+	if (Entry.Kind == EExecNodeKind::ExecStep)        NameColor = FLinearColor(0.78f, 0.78f, 0.78f);
+	if (Entry.bIsRoot)                                NameColor = FLinearColor(1.00f, 0.95f, 0.50f);
+	if (Entry.bIsCycleTruncated)                      NameColor = FLinearColor(1.00f, 0.45f, 0.20f);
 
-	// Function name is now the primary text — slightly larger
 	const FSlateFontInfo NameFont = (Entry.Kind == EExecNodeKind::Macro || Entry.Kind == EExecNodeKind::EventDispatcher)
 		? FCoreStyle::GetDefaultFontStyle("Italic",  10)
 		: (Entry.Kind == EExecNodeKind::ExecStep
 			? FCoreStyle::GetDefaultFontStyle("Regular", 9)
 			: FCoreStyle::GetDefaultFontStyle("Bold", 10));
-
 	const FSlateFontInfo IconFont = FCoreStyle::GetDefaultFontStyle("Regular", 8);
 
-	FText ToolTip = FText::GetEmpty();
-	if (Entry.bIsCycleTruncated)
-		ToolTip = FText::FromString(TEXT("Cycle detected — traversal stopped here"));
-	else if (Entry.bIsRoot)
-		ToolTip = FText::FromString(TEXT("This is the node you right-clicked on"));
+	FString Tooltip;
+	if (Entry.bIsCycleTruncated)    Tooltip = TEXT("Cycle detected — traversal stopped here");
+	else if (Entry.bIsRoot)         Tooltip = TEXT("This is the node you right-clicked on");
 	if (!Entry.IntraGraphExecPath.IsEmpty())
 	{
-		const FString BaseTip = ToolTip.IsEmpty() ? FString() : ToolTip.ToString() + TEXT("\n");
-		ToolTip = FText::FromString(BaseTip + TEXT("Exec path: ") + Entry.IntraGraphExecPath);
+		if (!Tooltip.IsEmpty()) Tooltip += TEXT("\n");
+		Tooltip += TEXT("Exec path: ") + Entry.IntraGraphExecPath;
 	}
 	if (Entry.OutgoingRouteLabels.Num() > 0)
 	{
-		const FString BaseTip = ToolTip.IsEmpty() ? FString() : ToolTip.ToString() + TEXT("\n");
-		ToolTip = FText::FromString(BaseTip + TEXT("Fan-out: ") + FString::Join(Entry.OutgoingRouteLabels, TEXT(", ")));
+		if (!Tooltip.IsEmpty()) Tooltip += TEXT("\n");
+		Tooltip += TEXT("Fan-out: ") + FString::Join(Entry.OutgoingRouteLabels, TEXT(", "));
 	}
 
-	TSharedPtr<FExecFuncEntry> EntryPtr = MakeShared<FExecFuncEntry>(Entry);
-	UExecFlowGraphNode*        OwnerNode = CastChecked<UExecFlowGraphNode>(GraphNode);
+	// ---- Captures for OnClicked ----
+	const TSharedPtr<FExecFuncEntry> EntryPtr = MakeShared<FExecFuncEntry>(Entry);
+	UExecFlowGraphNode* OwnerNode = CastChecked<UExecFlowGraphNode>(GraphNode);
 
-	TSharedRef<SVerticalBox> NameColumn = SNew(SVerticalBox)
-		+ SVerticalBox::Slot()
-		.AutoHeight()
+	static const FLinearColor CardBorder(0.04f, 0.04f, 0.04f, 0.85f);
+
+	TSharedRef<SWidget> NameColumn = SNew(SBorder)
+		.BorderImage(FAppStyle::GetBrush("Graph.Node.Body"))
+		.BorderBackgroundColor(CardBorder)
+		.Padding(FMargin(3.f, 1.f))
 		[
 			SNew(STextBlock)
 			.Text(FText::FromString(DisplayName))
 			.Font(NameFont)
-			.ColorAndOpacity(NameColor)
+			.ColorAndOpacity(FSlateColor(NameColor))
 		];
 
 	return SNew(SButton)
 		.ButtonStyle(FAppStyle::Get(), "NoBorder")
 		.ContentPadding(FMargin(2.f, 1.f))
-		.ToolTipText(ToolTip)
+		.ToolTipText(FText::FromString(Tooltip))
 		.Cursor(EMouseCursor::Hand)
 		.OnClicked_Lambda([EntryPtr, OwnerNode]() -> FReply
 		{
@@ -219,19 +196,19 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 		[
 			SNew(SHorizontalBox)
 
-			// Kind badge
+			// Kind icon
 			+ SHorizontalBox::Slot()
 			.AutoWidth()
-			.Padding(0.f, 0.f, 6.f, 0.f)
+			.Padding(0.f, 0.f, 4.f, 0.f)
 			.VAlign(VAlign_Center)
 			[
 				SNew(STextBlock)
 				.Text(FText::FromString(KindIcon))
 				.Font(IconFont)
-				.ColorAndOpacity(NodeIconColor)
+				.ColorAndOpacity(FSlateColor(NameColor))
 			]
 
-			// Function name — primary identity
+			// Function name
 			+ SHorizontalBox::Slot()
 			.FillWidth(1.0f)
 			.VAlign(VAlign_Center)

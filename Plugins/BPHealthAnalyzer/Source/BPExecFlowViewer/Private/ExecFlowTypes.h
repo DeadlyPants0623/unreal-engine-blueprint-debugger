@@ -31,6 +31,7 @@ struct FExecFuncEntry
 	FString IntraGraphExecPath;
 	/** Routes this node fans OUT to (e.g. "Branch: True", "IsValid: Valid"). Owned by this node, not inherited. */
 	TArray<FString> OutgoingRouteLabels;
+
 };
 
 // -----------------------------------------------------------------------
