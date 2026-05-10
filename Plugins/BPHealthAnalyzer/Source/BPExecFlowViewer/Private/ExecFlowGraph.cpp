@@ -1,7 +1,10 @@
 ﻿#include "ExecFlowGraph.h"
 
 #include "K2Node_FunctionEntry.h"
+#include "AssetRegistry/AssetDataTagMapSerializationDetails.h"
 #include "EdGraph/EdGraphPin.h"
+
+DEFINE_LOG_CATEGORY_STATIC(LogExecFlowGraph, Log, All);
 
 #define LOCTEXT_NAMESPACE "BPExecFlowViewer"
 
@@ -93,6 +96,271 @@ namespace
 	{
 		const FString Compact = RouteToCompactPinName(Route);
 		return Compact.IsEmpty() ? TEXT("Out") : Compact;
+	}
+
+	struct FNodeBounds
+	{
+		float Left = 0.0f;
+		float Top = 0.0f;
+		float Right = 0.0f;
+		float Bottom = 0.0f;
+	};
+
+	static FLinearColor MakeClusterBaseColor(const FString& Key)
+	{
+		const uint32 Hash = GetTypeHash(Key);
+		const float Hue = static_cast<float>(Hash % 360u);
+
+		return FLinearColor::MakeFromHSV8(
+			static_cast<uint8>(Hue / 360.0f * 255.0f),
+			140, // saturation
+			220 // value
+		);
+	}
+
+	static void BuildClusterColors(const FString& Key, FLinearColor& OutFill, FLinearColor& OutBorder)
+	{
+		const FLinearColor Base = MakeClusterBaseColor(Key);
+		OutFill = FLinearColor(Base.R, Base.G, Base.B, 0.12f);
+		OutBorder = FLinearColor(Base.R, Base.G, Base.B, 0.60f);
+	}
+
+	static bool DoRectsOverlap(const FExecFlowClusterVisual& A, const FExecFlowClusterVisual& B)
+	{
+		return A.Min.X < B.Max.X &&
+			A.Max.X > B.Min.X &&
+			A.Min.Y < B.Max.Y &&
+			A.Max.Y > B.Min.Y;
+	}
+
+	static bool HaveSameBlueprintLabel(const FExecFlowClusterVisual& A, const FExecFlowClusterVisual& B)
+	{
+		return A.Label == B.Label;
+	}
+
+	static void ShiftNodeX(UExecFlowGraphNode* Node, const float DeltaX)
+	{
+		if (!Node || FMath::IsNearlyZero(DeltaX))
+		{
+			return;
+		}
+		Node->NodePosX = FMath::RoundToInt(static_cast<float>(Node->NodePosX) + DeltaX);
+	}
+
+	static void PropagateShiftToDownstream(
+		const TArray<UExecFlowGraphNode*>& SeedNodes,
+		const TArray<FExecFlowEdge>& RenderEdges,
+		const TArray<UExecFlowGraphNode*>& IndexToNode,
+		const float DeltaX,
+		TSet<UExecFlowGraphNode*>& InOutAlreadyShifted)
+	{
+		if (FMath::IsNearlyZero(DeltaX) || SeedNodes.Num() == 0)
+		{
+			return;
+		}
+
+		UE_LOG(LogExecFlowGraph, Log,
+		       TEXT("PropagateShiftToDownstream: Seeds=%d DeltaX=%.1f Edges=%d"),
+		       SeedNodes.Num(),
+		       DeltaX,
+		       RenderEdges.Num());
+
+		TMap<int32, int32> PreShiftXByIndex;
+		PreShiftXByIndex.Reserve(IndexToNode.Num());
+
+		for (int32 Idx = 0; Idx < IndexToNode.Num(); ++Idx)
+		{
+			if (UExecFlowGraphNode* Node = IndexToNode[Idx])
+			{
+				PreShiftXByIndex.Add(Idx, Node->NodePosX);
+			}
+		}
+
+		TArray<int32> QueueIndices;
+		for (UExecFlowGraphNode* Seed : SeedNodes)
+		{
+			if (!Seed)
+			{
+				continue;
+			}
+
+			for (int32 Idx = 0; Idx < IndexToNode.Num(); ++Idx)
+			{
+				if (IndexToNode[Idx] == Seed)
+				{
+					QueueIndices.Add(Idx);
+					break;
+				}
+			}
+		}
+
+		for (int32 Q = 0; Q < QueueIndices.Num(); ++Q)
+		{
+			const int32 CurIdx = QueueIndices[Q];
+			if (!IndexToNode.IsValidIndex(CurIdx))
+			{
+				continue;
+			}
+
+			UExecFlowGraphNode* Cur = IndexToNode[CurIdx];
+			if (!Cur)
+			{
+				continue;
+			}
+
+			const int32* CurPreShiftX = PreShiftXByIndex.Find(CurIdx);
+			if (!CurPreShiftX)
+			{
+				continue;
+			}
+
+			for (const FExecFlowEdge& E : RenderEdges)
+			{
+				// Only follow OUTGOING edges from this node (downstream direction only).
+				if (E.FromIdx != CurIdx)
+				{
+					continue;
+				}
+
+				const int32 NeighborIdx = E.ToIdx;
+
+				if (!IndexToNode.IsValidIndex(NeighborIdx))
+				{
+					continue;
+				}
+
+				UExecFlowGraphNode* NeighborNode = IndexToNode[NeighborIdx];
+				if (!NeighborNode)
+				{
+					continue;
+				}
+
+				const int32* NeighborPreShiftX = PreShiftXByIndex.Find(NeighborIdx);
+				if (NeighborPreShiftX && *NeighborPreShiftX <= *CurPreShiftX)
+				{
+					continue;
+				}
+
+				if (!InOutAlreadyShifted.Contains(NeighborNode))
+				{
+					ShiftNodeX(NeighborNode, DeltaX);
+					UE_LOG(LogExecFlowGraph, Log,
+					       TEXT("  DownstreamShift: To='%s' NewX=%d"),
+					       *NeighborNode->GetNodeTitle(ENodeTitleType::ListView).ToString(),
+					       NeighborNode->NodePosX);
+					InOutAlreadyShifted.Add(NeighborNode);
+					QueueIndices.Add(NeighborIdx);
+				}
+			}
+		}
+	}
+
+	static void ShiftClusterAndMembers(
+		FExecFlowClusterVisual& Cluster,
+		const float DeltaX,
+		TMap<FString, TArray<UExecFlowGraphNode*>>& ClusterKeyToNodes,
+		const TArray<FExecFlowEdge>& RenderEdges,
+		const TArray<UExecFlowGraphNode*>& IndexToNode,
+		TSet<UExecFlowGraphNode*>& InOutAlreadyShifted)
+	{
+		if (FMath::IsNearlyZero(DeltaX))
+		{
+			return;
+		}
+
+		Cluster.Min.X += DeltaX;
+		Cluster.Max.X += DeltaX;
+
+		TArray<UExecFlowGraphNode*>* Members = ClusterKeyToNodes.Find(Cluster.Key);
+		if (!Members)
+		{
+			return;
+		}
+
+		// REMOVE the local TSet<UExecFlowGraphNode*> AlreadyShifted; — use InOutAlreadyShifted instead
+
+		for (UExecFlowGraphNode* Node : *Members)
+		{
+			if (!Node)
+			{
+				continue;
+			}
+			if (!InOutAlreadyShifted.Contains(Node)) // <-- guard seeds too
+			{
+				ShiftNodeX(Node, DeltaX);
+				InOutAlreadyShifted.Add(Node);
+			}
+		}
+
+		PropagateShiftToDownstream(*Members, RenderEdges, IndexToNode, DeltaX, InOutAlreadyShifted);
+	}
+
+	static void ResolveInterBlueprintClusterOverlaps(
+		TArray<FExecFlowClusterVisual>& InOutClusters,
+		TMap<FString, TArray<UExecFlowGraphNode*>>& ClusterKeyToNodes,
+		const TArray<FExecFlowEdge>& RenderEdges,
+		const TArray<UExecFlowGraphNode*>& IndexToNode)
+	{
+		const float MinGapX = 64.0f;
+		const int32 MaxPasses = 32;
+
+		for (int32 Pass = 0; Pass < MaxPasses; ++Pass)
+		{
+			bool bAnyMoved = false;
+			TSet<UExecFlowGraphNode*> AlreadyShiftedThisPass;
+
+			for (int32 i = 0; i < InOutClusters.Num(); ++i)
+			{
+				for (int32 j = i + 1; j < InOutClusters.Num(); ++j)
+				{
+					FExecFlowClusterVisual& A = InOutClusters[i];
+					FExecFlowClusterVisual& B = InOutClusters[j];
+
+					if (HaveSameBlueprintLabel(A, B))
+					{
+						continue;
+					}
+
+					UE_LOG(LogExecFlowGraph, Log,
+					       TEXT("SolveCheck: A='%s' B='%s' A[(%.1f,%.1f)->(%.1f,%.1f)] B[(%.1f,%.1f)->(%.1f,%.1f)]"),
+					       *A.Key, *B.Key,
+					       A.Min.X, A.Min.Y, A.Max.X, A.Max.Y,
+					       B.Min.X, B.Min.Y, B.Max.X, B.Max.Y);
+
+					if (!DoRectsOverlap(A, B))
+					{
+						continue;
+					}
+
+					FExecFlowClusterVisual* MoveTarget = &B;
+					const FExecFlowClusterVisual* Anchor = &A;
+
+					if (A.Min.X > B.Min.X || (A.Min.X == B.Min.X && i > j))
+					{
+						MoveTarget = &A;
+						Anchor = &B;
+					}
+
+					const float DesiredMinX = Anchor->Max.X + MinGapX;
+					const float DeltaX = DesiredMinX - MoveTarget->Min.X;
+
+					UE_LOG(LogExecFlowGraph, Log,
+					       TEXT("SolveMove: Anchor='%s' Move='%s' DesiredMinX=%.1f DeltaX=%.1f"),
+					       *Anchor->Key, *MoveTarget->Key, DesiredMinX, DeltaX);
+					if (DeltaX > 0.0f)
+					{
+						ShiftClusterAndMembers(*MoveTarget, DeltaX, ClusterKeyToNodes, RenderEdges, IndexToNode,
+						                       AlreadyShiftedThisPass);
+						bAnyMoved = true;
+					}
+				}
+			}
+
+			if (!bAnyMoved)
+			{
+				break;
+			}
+		}
 	}
 } // namespace
 
@@ -234,10 +502,22 @@ UExecFlowGraph* UExecFlowGraph::Create(UObject* Outer)
 
 bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& FlowMap)
 {
-	if (!Graph) return false;
+	if (!Graph)
+	{
+		UE_LOG(LogExecFlowGraph, Error, TEXT("PopulateGraph: Graph is null"));
+		return false;
+	}
 
 	Graph->Nodes.Empty();
-	if (FlowMap.Groups.Num() == 0) return false;
+	Graph->ClusterVisuals.Reset();
+
+	UE_LOG(LogExecFlowGraph, Log, TEXT("PopulateGraph: FlowMap has %d groups"), FlowMap.Groups.Num());
+
+	if (FlowMap.Groups.Num() == 0)
+	{
+		UE_LOG(LogExecFlowGraph, Warning, TEXT("PopulateGraph: FlowMap has no groups — aborting"));
+		return false;
+	}
 
 	// Expand to render groups: one visible graph node per function/exec-step entry.
 	TArray<FExecBPGroup> RenderGroups;
@@ -501,28 +781,51 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 				}
 			}
 
-			int32 DesiredLane = StartLane + i;
-			if (ParentLanes.Num() > 0)
+		int32 DesiredLane = StartLane + i;
+		if (ParentLanes.Num() > 0)
+		{
+			ParentLanes.Sort();
+			const int32 Mid = ParentLanes.Num() / 2;
+			if ((ParentLanes.Num() % 2) == 1)
 			{
-				ParentLanes.Sort();
-				const int32 Mid = ParentLanes.Num() / 2;
-				if ((ParentLanes.Num() % 2) == 1)
-				{
-					DesiredLane = ParentLanes[Mid];
-				}
-				else
-				{
-					DesiredLane = FMath::RoundToInt(0.5f * static_cast<float>(ParentLanes[Mid - 1] + ParentLanes[Mid]));
-				}
+				DesiredLane = ParentLanes[Mid];
 			}
+			else
+			{
+				DesiredLane = FMath::RoundToInt(0.5f * static_cast<float>(ParentLanes[Mid - 1] + ParentLanes[Mid]));
+			}
+		}
 
-			const int32 Lane = FindNearestFreeLane(DesiredLane, UsedLanes);
-			NodeToLane.Add(NodeIdx, Lane);
+		// Cross-BP Call target override: if this node is the destination of a cross-BP "Call"
+		// edge, anchor it to lane 0 regardless of the callers' lanes.  This forces the Call
+		// wire to arc diagonally rather than running flat through same-lane intermediate nodes
+		// that sit between the caller and the callee in X space.
+		for (const FExecFlowEdge& E : RenderEdges)
+		{
+			if (E.ToIdx != NodeIdx) continue;
+			if (E.RouteLabel != TEXT("Call")) continue;
+			if (!RenderGroups.IsValidIndex(E.FromIdx) || !RenderGroups.IsValidIndex(E.ToIdx)) continue;
+			if (RenderGroups[E.FromIdx].BlueprintName != RenderGroups[E.ToIdx].BlueprintName)
+			{
+				UE_LOG(LogExecFlowGraph, Verbose,
+					TEXT("LaneOverride: NodeIdx=%d ('%s') is cross-BP Call target — forcing DesiredLane 0 (was %d)"),
+					NodeIdx,
+					RenderGroups.IsValidIndex(NodeIdx) ? *RenderGroups[NodeIdx].BlueprintName : TEXT("?"),
+					DesiredLane);
+				DesiredLane = 0;
+				break;
+			}
+		}
+
+		const int32 Lane = FindNearestFreeLane(DesiredLane, UsedLanes);
+		NodeToLane.Add(NodeIdx, Lane);
 		}
 	}
 
 	TArray<UExecFlowGraphNode*> IndexToNode;
 	IndexToNode.Init(nullptr, RenderGroups.Num());
+	TMap<int32, FNodeBounds> RenderNodeBoundsByIndex;
+	const float NodeWidthEstimate = 280.0f;
 
 	for (auto& KV : ColumnGroups)
 	{
@@ -541,11 +844,380 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 			NewNode->GroupData = RenderGroups[GIdx];
 			NewNode->NodePosX = FMath::RoundToInt(X);
 			NewNode->NodePosY = FMath::RoundToInt(CenterY - (0.5f * H));
+			const float NodeLeft = static_cast<float>(NewNode->NodePosX);
+			const float NodeTop = static_cast<float>(NewNode->NodePosY);
+			const float NodeRight = NodeLeft + NodeWidthEstimate;
+			const float NodeBottom = NodeTop + H;
+
+			RenderNodeBoundsByIndex.Add(GIdx, FNodeBounds{NodeLeft, NodeTop, NodeRight, NodeBottom});
+
 			NewNode->AllocateDefaultPins();
 			Graph->AddNode(NewNode, false, false);
 
 			IndexToNode[GIdx] = NewNode;
 		}
+	}
+
+	const float ClusterPadX = 36.0f;
+	const float ClusterPadY = 28.0f;
+	const float ClusterSplitGap = ColSpacing * 1.25f;
+
+	TMap<FString, TArray<int32>> ClusterToRenderIndices;
+
+	for (int32 RenderIdx = 0; RenderIdx < RenderGroups.Num(); ++RenderIdx)
+	{
+		const FExecBPGroup& RG = RenderGroups[RenderIdx];
+		const FString ClusterKey = RG.ClusterBlueprintName.IsEmpty()
+			                           ? RG.BlueprintName
+			                           : RG.ClusterBlueprintName;
+		ClusterToRenderIndices.FindOrAdd(ClusterKey).Add(RenderIdx);
+	}
+
+	UE_LOG(LogExecFlowGraph, Log, TEXT("PopulateGraph: Built %d blueprint buckets from %d render groups"),
+	       ClusterToRenderIndices.Num(), RenderGroups.Num());
+
+	TMap<FString, TArray<UExecFlowGraphNode*>> ClusterKeyToNodes;
+
+	for (const TPair<FString, TArray<int32>>& Pair : ClusterToRenderIndices)
+	{
+		const FString& ClusterKey = Pair.Key;
+		TArray<int32> MemberIndices = Pair.Value;
+
+		if (MemberIndices.Num() == 0)
+		{
+			continue;
+		}
+
+		MemberIndices.Sort([&RenderNodeBoundsByIndex](const int32 A, const int32 B)
+		{
+			const FNodeBounds* BoundsA = RenderNodeBoundsByIndex.Find(A);
+			const FNodeBounds* BoundsB = RenderNodeBoundsByIndex.Find(B);
+			if (!BoundsA || !BoundsB)
+			{
+				return A < B;
+			}
+			return BoundsA->Left < BoundsB->Left;
+		});
+
+		TArray<TArray<int32>> Segments;
+		for (const int32 RenderIdx : MemberIndices)
+		{
+			const FNodeBounds* Bounds = RenderNodeBoundsByIndex.Find(RenderIdx);
+			if (!Bounds)
+			{
+				UE_LOG(LogExecFlowGraph, Warning,
+				       TEXT("PopulateGraph: No bounds found for render index %d in blueprint '%s'"), RenderIdx,
+				       *ClusterKey);
+				continue;
+			}
+
+			if (Segments.Num() == 0)
+			{
+				Segments.AddDefaulted();
+				Segments.Last().Add(RenderIdx);
+				continue;
+			}
+
+			TArray<int32>& LastSegment = Segments.Last();
+			const int32 LastIdx = LastSegment.Last();
+			const FNodeBounds* LastBounds = RenderNodeBoundsByIndex.Find(LastIdx);
+			if (!LastBounds)
+			{
+				LastSegment.Add(RenderIdx);
+				continue;
+			}
+
+			const float GapX = Bounds->Left - LastBounds->Right;
+			if (GapX > ClusterSplitGap)
+			{
+				Segments.AddDefaulted();
+				Segments.Last().Add(RenderIdx);
+			}
+			else
+			{
+				LastSegment.Add(RenderIdx);
+			}
+		}
+
+		UE_LOG(LogExecFlowGraph, Log, TEXT("PopulateGraph: Blueprint '%s' split into %d segment(s)"), *ClusterKey,
+		       Segments.Num());
+
+		for (int32 SegmentIdx = 0; SegmentIdx < Segments.Num(); ++SegmentIdx)
+		{
+			const TArray<int32>& SegmentMembers = Segments[SegmentIdx];
+			if (SegmentMembers.Num() == 0)
+			{
+				continue;
+			}
+
+			bool bHasAnyBounds = false;
+			FVector2D Min(FLT_MAX, FLT_MAX);
+			FVector2D Max(-FLT_MAX, -FLT_MAX);
+
+			for (const int32 RenderIdx : SegmentMembers)
+			{
+				const FNodeBounds* Bounds = RenderNodeBoundsByIndex.Find(RenderIdx);
+				if (!Bounds)
+				{
+					continue;
+				}
+
+				bHasAnyBounds = true;
+				Min.X = FMath::Min(Min.X, Bounds->Left);
+				Min.Y = FMath::Min(Min.Y, Bounds->Top);
+				Max.X = FMath::Max(Max.X, Bounds->Right);
+				Max.Y = FMath::Max(Max.Y, Bounds->Bottom);
+			}
+
+			if (!bHasAnyBounds)
+			{
+				UE_LOG(LogExecFlowGraph, Warning,
+				       TEXT("PopulateGraph: Blueprint '%s' segment %d had no valid bounds — skipped"), *ClusterKey,
+				       SegmentIdx);
+				continue;
+			}
+
+			Min.X -= ClusterPadX;
+			Min.Y -= ClusterPadY;
+			Max.X += ClusterPadX;
+			Max.Y += ClusterPadY;
+
+			FExecFlowClusterVisual Visual;
+			Visual.Key = FString::Printf(TEXT("%s#%d"), *ClusterKey, SegmentIdx);
+			Visual.Label = ClusterKey;
+			Visual.Min = Min;
+			Visual.Max = Max;
+			BuildClusterColors(ClusterKey, Visual.FillColor, Visual.BorderColor);
+
+			UE_LOG(LogExecFlowGraph, Log,
+			       TEXT("PopulateGraph: Cluster '%s' (segment %d) — Min=(%.1f, %.1f) Max=(%.1f, %.1f) Members=%d"),
+			       *ClusterKey, SegmentIdx, Min.X, Min.Y, Max.X, Max.Y, SegmentMembers.Num());
+
+			// Capture node membership for later overlap-driven node shifts.
+			TArray<UExecFlowGraphNode*>& ClusterMembers = ClusterKeyToNodes.FindOrAdd(Visual.Key);
+			for (const int32 RenderIdx : SegmentMembers)
+			{
+				if (IndexToNode.IsValidIndex(RenderIdx) && IndexToNode[RenderIdx])
+				{
+					ClusterMembers.Add(IndexToNode[RenderIdx]);
+				}
+			}
+
+			Graph->ClusterVisuals.Add(MoveTemp(Visual));
+		}
+	}
+
+	UE_LOG(LogExecFlowGraph, Log, TEXT("---- PreSolve Cluster Bounds ----"));
+	for (const FExecFlowClusterVisual& V : Graph->ClusterVisuals)
+	{
+		UE_LOG(LogExecFlowGraph, Log,
+		       TEXT("PreSolve: Key='%s' Label='%s' Min=(%.1f, %.1f) Max=(%.1f, %.1f)"),
+		       *V.Key, *V.Label, V.Min.X, V.Min.Y, V.Max.X, V.Max.Y);
+	}
+
+	ResolveInterBlueprintClusterOverlaps(Graph->ClusterVisuals, ClusterKeyToNodes, RenderEdges, IndexToNode);
+
+	// Re-fit cluster visuals from current member node positions after overlap shifts.
+	for (FExecFlowClusterVisual& Visual : Graph->ClusterVisuals)
+	{
+		const TArray<UExecFlowGraphNode*>* Members = ClusterKeyToNodes.Find(Visual.Key);
+		if (!Members || Members->Num() == 0)
+		{
+			continue;
+		}
+
+		bool bHasAny = false;
+		FVector2D Min(FLT_MAX, FLT_MAX);
+		FVector2D Max(-FLT_MAX, -FLT_MAX);
+
+		for (UExecFlowGraphNode* Node : *Members)
+		{
+			if (!Node)
+			{
+				continue;
+			}
+
+			// Mirror the same node bounds model used during initial cluster build.
+			const float NodeLeft = static_cast<float>(Node->NodePosX);
+			const float NodeTop = static_cast<float>(Node->NodePosY);
+			const float NodeHeight = FMath::Max(
+				MinNodeHeight,
+				HeaderHeight + Node->GroupData.Functions.Num() * FuncRowHeight + BodyPadding);
+			const float NodeRight = NodeLeft + NodeWidthEstimate;
+			const float NodeBottom = NodeTop + NodeHeight;
+
+			bHasAny = true;
+			Min.X = FMath::Min(Min.X, NodeLeft);
+			Min.Y = FMath::Min(Min.Y, NodeTop);
+			Max.X = FMath::Max(Max.X, NodeRight);
+			Max.Y = FMath::Max(Max.Y, NodeBottom);
+		}
+
+		if (!bHasAny)
+		{
+			continue;
+		}
+
+		Visual.Min = FVector2D(Min.X - ClusterPadX, Min.Y - ClusterPadY);
+		Visual.Max = FVector2D(Max.X + ClusterPadX, Max.Y + ClusterPadY);
+
+		UE_LOG(LogExecFlowGraph, Log,
+		       TEXT("Refit1: Key='%s' Members=%d Min=(%.1f, %.1f) Max=(%.1f, %.1f)"),
+		       *Visual.Key, Members->Num(), Visual.Min.X, Visual.Min.Y, Visual.Max.X, Visual.Max.Y);
+
+		UE_LOG(LogExecFlowGraph, Verbose,
+		       TEXT("PopulateGraph: Refit cluster '%s' -> Min=(%.1f, %.1f) Max=(%.1f, %.1f) Members=%d"),
+		       *Visual.Key, Visual.Min.X, Visual.Min.Y, Visual.Max.X, Visual.Max.Y, Members->Num());
+	}
+
+	// Y-normalization pass: expand every cluster overlay to the shared global Y range.
+	// Clusters at different Y-lanes (e.g. BP_A at lane 0, BP_B at lane 1) would otherwise
+	// have different top/bottom edges, making one cluster banner appear higher/lower than
+	// the others. Sharing the same Y extent gives a uniform horizontal-band appearance.
+	if (Graph->ClusterVisuals.Num() > 1)
+	{
+		double GlobalMinY =  DBL_MAX;
+		double GlobalMaxY = -DBL_MAX;
+		for (const FExecFlowClusterVisual& V : Graph->ClusterVisuals)
+		{
+			GlobalMinY = FMath::Min(GlobalMinY, V.Min.Y);
+			GlobalMaxY = FMath::Max(GlobalMaxY, V.Max.Y);
+		}
+		UE_LOG(LogExecFlowGraph, Log,
+			TEXT("YNormalize: GlobalMinY=%.1f GlobalMaxY=%.1f — applying to %d clusters"),
+			GlobalMinY, GlobalMaxY, Graph->ClusterVisuals.Num());
+		for (FExecFlowClusterVisual& V : Graph->ClusterVisuals)
+		{
+			V.Min.Y = GlobalMinY;
+			V.Max.Y = GlobalMaxY;
+		}
+	}
+
+	// Final separation pass: prevent cross-blueprint cluster overlap after refit.
+	// const float FinalGapX = 64.0f;
+	// const int32 FinalMaxPasses = 16;
+	//
+	// for (int32 Pass = 0; Pass < FinalMaxPasses; ++Pass)
+	// {
+	// 	bool bMoved = false;
+	//
+	// 	for (int32 i = 0; i < Graph->ClusterVisuals.Num(); ++i)
+	// 	{
+	// 		for (int32 j = i + 1; j < Graph->ClusterVisuals.Num(); ++j)
+	// 		{
+	// 			FExecFlowClusterVisual& A = Graph->ClusterVisuals[i];
+	// 			FExecFlowClusterVisual& B = Graph->ClusterVisuals[j];
+	//
+	// 			// Only enforce separation across different blueprints.
+	// 			if (A.Label == B.Label)
+	// 			{
+	// 				continue;
+	// 			}
+	//
+	// 			const bool bOverlap =
+	// 				A.Min.X < B.Max.X && A.Max.X > B.Min.X &&
+	// 				A.Min.Y < B.Max.Y && A.Max.Y > B.Min.Y;
+	//
+	// 			UE_LOG(LogExecFlowGraph, Log,
+	// 			       TEXT("FinalSepCheck[P%d]: A='%s' B='%s' Overlap=%s"),
+	// 			       Pass, *A.Key, *B.Key, bOverlap ? TEXT("YES") : TEXT("NO"));
+	//
+	// 			if (!bOverlap)
+	// 			{
+	// 				continue;
+	// 			}
+	//
+	// 			// Move the right-side cluster further right.
+	// 			FExecFlowClusterVisual* Move = &B;
+	// 			FExecFlowClusterVisual* Anchor = &A;
+	// 			if (A.Min.X > B.Min.X)
+	// 			{
+	// 				Move = &A;
+	// 				Anchor = &B;
+	// 			}
+	//
+	//
+	// 			const float DesiredMinX = Anchor->Max.X + FinalGapX;
+	// 			const float DeltaX = DesiredMinX - Move->Min.X;
+	// 			if (DeltaX <= 0.0f)
+	// 			{
+	// 				continue;
+	// 			}
+	//
+	// 			Move->Min.X += DeltaX;
+	// 			Move->Max.X += DeltaX;
+	//
+	// 			UE_LOG(LogExecFlowGraph, Log,
+	// 			       TEXT("FinalSepMove[P%d]: Anchor='%s' Move='%s' DeltaX=%.1f"),
+	// 			       Pass, *Anchor->Key, *Move->Key, DeltaX);
+	//
+	// 			// Move member nodes with the shifted cluster.
+	// 			if (TArray<UExecFlowGraphNode*>* Members = ClusterKeyToNodes.Find(Move->Key))
+	// 			{
+	// 				for (UExecFlowGraphNode* Node : *Members)
+	// 				{
+	// 					if (Node)
+	// 					{
+	// 						Node->NodePosX = FMath::RoundToInt(static_cast<float>(Node->NodePosX) + DeltaX);
+	// 					}
+	// 				}
+	// 			}
+	//
+	// 			bMoved = true;
+	// 		}
+	// 	}
+	//
+	// 	if (!bMoved)
+	// 	{
+	// 		break;
+	// 	}
+	// }
+	//
+	// // Refit once more after final separation node moves.
+	// for (FExecFlowClusterVisual& Visual : Graph->ClusterVisuals)
+	// {
+	// 	const TArray<UExecFlowGraphNode*>* Members = ClusterKeyToNodes.Find(Visual.Key);
+	// 	if (!Members || Members->Num() == 0) continue;
+	//
+	// 	bool bHasAny = false;
+	// 	FVector2D Min(FLT_MAX, FLT_MAX);
+	// 	FVector2D Max(-FLT_MAX, -FLT_MAX);
+	//
+	// 	for (UExecFlowGraphNode* Node : *Members)
+	// 	{
+	// 		if (!Node) continue;
+	//
+	// 		const float NodeLeft = static_cast<float>(Node->NodePosX);
+	// 		const float NodeTop = static_cast<float>(Node->NodePosY);
+	// 		const float NodeHeight = FMath::Max(
+	// 			MinNodeHeight,
+	// 			HeaderHeight + Node->GroupData.Functions.Num() * FuncRowHeight + BodyPadding);
+	// 		const float NodeRight = NodeLeft + NodeWidthEstimate;
+	// 		const float NodeBottom = NodeTop + NodeHeight;
+	//
+	// 		bHasAny = true;
+	// 		Min.X = FMath::Min(Min.X, NodeLeft);
+	// 		Min.Y = FMath::Min(Min.Y, NodeTop);
+	// 		Max.X = FMath::Max(Max.X, NodeRight);
+	// 		Max.Y = FMath::Max(Max.Y, NodeBottom);
+	// 	}
+	//
+	// 	if (!bHasAny) continue;
+	//
+	// 	Visual.Min = FVector2D(Min.X - ClusterPadX, Min.Y - ClusterPadY);
+	// 	Visual.Max = FVector2D(Max.X + ClusterPadX, Max.Y + ClusterPadY);
+	// 	UE_LOG(LogExecFlowGraph, Log,
+	// 	       TEXT("Refit2: Key='%s' Members=%d Min=(%.1f, %.1f) Max=(%.1f, %.1f)"),
+	// 	       *Visual.Key, Members->Num(), Visual.Min.X, Visual.Min.Y, Visual.Max.X, Visual.Max.Y);
+	// }
+	//
+	// UE_LOG(LogExecFlowGraph, Log, TEXT("PopulateGraph: Final ClusterVisuals count = %d"), Graph->ClusterVisuals.Num());
+
+	for (const FExecFlowClusterVisual& Visual : Graph->ClusterVisuals)
+	{
+		UE_LOG(LogExecFlowGraph, Verbose,
+		       TEXT("PopulateGraph: Post-resolve cluster '%s' label='%s' Min=(%.1f, %.1f) Max=(%.1f, %.1f)"),
+		       *Visual.Key, *Visual.Label, Visual.Min.X, Visual.Min.Y, Visual.Max.X, Visual.Max.Y);
 	}
 
 	for (const FExecFlowEdge& Edge : RenderEdges)
@@ -557,6 +1229,8 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 		UExecFlowGraphNode* FromNode = IndexToNode[Edge.FromIdx];
 		UExecFlowGraphNode* ToNode = IndexToNode[Edge.ToIdx];
 		if (!FromNode || !ToNode) continue;
+		
+		if (FromNode->NodePosX >= ToNode->NodePosX) continue;
 
 		// Resolve the correct output pin by route label
 		const FString PinName = RouteToOutputPinName(Edge.RouteLabel);
@@ -564,6 +1238,37 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 		UEdGraphPin* InPin = ToNode->GetInputPin();
 		if (OutPin && InPin)
 			OutPin->MakeLinkTo(InPin);
+	}
+
+	// Log final exec flow
+	UE_LOG(LogExecFlowGraph, Log, TEXT("---- Final Exec Flow ----"));
+	for (const FExecFlowEdge& Edge : RenderEdges)
+	{
+		const bool bValidFrom = Edge.FromIdx >= 0 && Edge.FromIdx < IndexToNode.Num();
+		const bool bValidTo = Edge.ToIdx >= 0 && Edge.ToIdx < IndexToNode.Num();
+		if (!bValidFrom || !bValidTo) continue;
+
+		const UExecFlowGraphNode* From = IndexToNode[Edge.FromIdx];
+		const UExecFlowGraphNode* To = IndexToNode[Edge.ToIdx];
+		if (!From || !To) continue;
+
+		const FString FromFunc = From->GroupData.Functions.Num() > 0
+			                         ? From->GroupData.Functions[0].DisplayName.IsEmpty()
+				                           ? From->GroupData.Functions[0].FunctionName.ToString()
+				                           : From->GroupData.Functions[0].DisplayName
+			                         : TEXT("?");
+		const FString ToFunc = To->GroupData.Functions.Num() > 0
+			                       ? To->GroupData.Functions[0].DisplayName.IsEmpty()
+				                         ? To->GroupData.Functions[0].FunctionName.ToString()
+				                         : To->GroupData.Functions[0].DisplayName
+			                       : TEXT("?");
+
+		UE_LOG(LogExecFlowGraph, Log,
+		       TEXT("  ExecFlow: [%s::%s] --%s--> [%s::%s]  (X:%d -> X:%d)"),
+		       *From->GroupData.BlueprintName, *FromFunc,
+		       Edge.RouteLabel.IsEmpty() ? TEXT("exec") : *Edge.RouteLabel,
+		       *To->GroupData.BlueprintName, *ToFunc,
+		       From->NodePosX, To->NodePosX);
 	}
 
 	return true;

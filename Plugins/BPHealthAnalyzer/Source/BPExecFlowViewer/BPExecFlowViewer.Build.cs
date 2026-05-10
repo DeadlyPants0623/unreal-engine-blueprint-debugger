@@ -15,6 +15,7 @@ public class BPExecFlowViewer : ModuleRules
 			"BlueprintGraph",
 			"GraphEditor",
 			"Kismet",
+			"KismetCompiler",   // FBlueprintDebugData (BlueprintGeneratedClass.h)
 			"AssetRegistry",
 			"Slate",
 			"SlateCore",

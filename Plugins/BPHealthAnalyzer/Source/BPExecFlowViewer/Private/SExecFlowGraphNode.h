@@ -26,7 +26,11 @@ public:
 	virtual void UpdateGraphNode() override;
 
 private:
-	/** Build one clickable row for a function / event / macro entry. */
+	/**
+	 * Build one clickable row for a function / event / macro entry.
+	 *
+	 * @param Entry  The function entry to render (name, kind, flags, source node).
+	 */
 	TSharedRef<SWidget> BuildFuncRow(const FExecFuncEntry& Entry);
 };
 
