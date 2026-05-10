@@ -86,6 +86,9 @@ public:
 	/** Returns the output pin whose name matches the given compact route (e.g. "V", "T").
 	 *  Falls back to GetOutputPin() if no exact match is found. */
 	UEdGraphPin* GetOutputPinForRoute(const FString& CompactRoute) const;
+
+	/** Set by SExecLocalPathWidget after PopulateGraph. Fires when the user clicks "Trace from here" on a row. */
+	TFunction<void(UEdGraphNode*)> RerootCallback;
 };
 
 // -----------------------------------------------------------------------

@@ -42,6 +42,7 @@ public:
 
 private:
 	void Rebuild();
+	void SetupRerootCallbacks();
 	TSharedRef<SWidget> CreateGraphEditorWidget();
 	void PostProcessWithGraphEditor();
 	EVisibility GetErrorVisibility() const;

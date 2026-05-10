@@ -163,7 +163,7 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 		Tooltip += TEXT("Fan-out: ") + FString::Join(Entry.OutgoingRouteLabels, TEXT(", "));
 	}
 
-	// ---- Captures for OnClicked ----
+	// ---- Captures for lambdas ----
 	const TSharedPtr<FExecFuncEntry> EntryPtr = MakeShared<FExecFuncEntry>(Entry);
 	UExecFlowGraphNode* OwnerNode = CastChecked<UExecFlowGraphNode>(GraphNode);
 
@@ -180,7 +180,8 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 			.ColorAndOpacity(FSlateColor(NameColor))
 		];
 
-	return SNew(SButton)
+	// Navigate button — left-click jumps to the source node in the Blueprint Editor
+	TSharedRef<SWidget> NavigateButton = SNew(SButton)
 		.ButtonStyle(FAppStyle::Get(), "NoBorder")
 		.ContentPadding(FMargin(2.f, 1.f))
 		.ToolTipText(FText::FromString(Tooltip))
@@ -216,6 +217,44 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 				NameColumn
 			]
 		];
+
+	TSharedRef<SHorizontalBox> Row = SNew(SHorizontalBox)
+		+ SHorizontalBox::Slot()
+		.FillWidth(1.0f)
+		[
+			NavigateButton
+		];
+
+	// Re-root button — re-traces the graph with this entry as the new root
+	if (OwnerNode->RerootCallback && EntryPtr->SourceNode.IsValid())
+	{
+		Row->AddSlot()
+		.AutoWidth()
+		.VAlign(VAlign_Center)
+		.Padding(2.f, 0.f, 0.f, 0.f)
+		[
+			SNew(SButton)
+			.ButtonStyle(FAppStyle::Get(), "NoBorder")
+			.ContentPadding(FMargin(3.f, 1.f))
+			.ToolTipText(FText::FromString(TEXT("Trace from here")))
+			.Cursor(EMouseCursor::Hand)
+			.OnClicked_Lambda([EntryPtr, OwnerNode]() -> FReply
+			{
+				if (OwnerNode->RerootCallback)
+					if (UEdGraphNode* Node = EntryPtr->SourceNode.Get())
+						OwnerNode->RerootCallback(Node);
+				return FReply::Handled();
+			})
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("→")))
+				.Font(FCoreStyle::GetDefaultFontStyle("Bold", 10))
+				.ColorAndOpacity(FSlateColor(FLinearColor(0.40f, 0.80f, 1.00f)))
+			]
+		];
+	}
+
+	return Row;
 }
 
 // -----------------------------------------------------------------------

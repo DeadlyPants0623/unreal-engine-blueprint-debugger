@@ -210,10 +210,29 @@ void SExecLocalPathWidget::Rebuild()
 	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Graph populated — %d nodes, %d clusters"),
 		FlowGraph->Nodes.Num(), FlowGraph->ClusterVisuals.Num());
 
+	SetupRerootCallbacks();
+
+	// Find the root node so we can center the view on it after rebuild
+	UExecFlowGraphNode* RootExecNode = nullptr;
+	for (UEdGraphNode* GNode : FlowGraph->Nodes)
+	{
+		if (UExecFlowGraphNode* ExecNode = Cast<UExecFlowGraphNode>(GNode))
+		{
+			for (const FExecFuncEntry& Entry : ExecNode->GroupData.Functions)
+			{
+				if (Entry.bIsRoot) { RootExecNode = ExecNode; break; }
+			}
+			if (RootExecNode) break;
+		}
+	}
+
 	// Refresh the SGraphEditor	if (GraphContainer.IsValid())
 	{
 		GraphContainer->SetContent(CreateGraphEditorWidget());
 		PostProcessWithGraphEditor();
+
+		if (RootExecNode && GraphEditor.IsValid())
+			GraphEditor->JumpToNode(RootExecNode, /*bRequestRename=*/false, /*bSelectNode=*/false);
 	}
 }
 
@@ -314,6 +333,24 @@ EVisibility SExecLocalPathWidget::GetErrorVisibility() const
 	return bHasError ? EVisibility::Visible : EVisibility::Collapsed;
 }
 
+
+void SExecLocalPathWidget::SetupRerootCallbacks()
+{
+	if (!FlowGraph) return;
+
+	TWeakPtr<SExecLocalPathWidget> WeakSelf = SharedThis(this);
+	for (UEdGraphNode* Node : FlowGraph->Nodes)
+	{
+		if (UExecFlowGraphNode* ExecNode = Cast<UExecFlowGraphNode>(Node))
+		{
+			ExecNode->RerootCallback = [WeakSelf](UEdGraphNode* InNode)
+			{
+				if (TSharedPtr<SExecLocalPathWidget> Pinned = WeakSelf.Pin())
+					Pinned->SetTargetNode(InNode);
+			};
+		}
+	}
+}
 
 // -----------------------------------------------------------------------
 //  Controls
