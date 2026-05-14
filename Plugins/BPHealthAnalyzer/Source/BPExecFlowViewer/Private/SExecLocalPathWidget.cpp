@@ -2,6 +2,7 @@
 #include "CrossBPExecTracer.h"
 #include "ExecFlowGraph.h"
 #include "BPExecFlowViewer.h"
+#include "CausalityAnalyzer.h"
 
 #include "Engine/Blueprint.h"
 
@@ -108,6 +109,18 @@ void SExecLocalPathWidget::Construct(const FArguments& InArgs)
 				.ToolTipText(LOCTEXT("RebuildTip", "Refresh execution flow graph"))
 				.OnClicked(this, &SExecLocalPathWidget::OnRebuildClicked)
 			]
+
+			// Clear causality button — only visible while a chain is active
+			+ SHorizontalBox::Slot()
+			.AutoWidth()
+			.Padding(6.f, 0.f, 0.f, 0.f)
+			[
+				SNew(SButton)
+				.Text(LOCTEXT("ClearCausalityButton", "Clear ◈"))
+				.ToolTipText(LOCTEXT("ClearCausalityTip", "Clear causality chain highlight"))
+				.Visibility(this, &SExecLocalPathWidget::GetClearCausalityVisibility)
+				.OnClicked(this, &SExecLocalPathWidget::OnClearCausalityClicked)
+			]
 		]
 
 		// ---- Graph area ----
@@ -180,11 +193,20 @@ void SExecLocalPathWidget::Rebuild()
 	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Tracing from node '%s' (Back=%d Fwd=%d)"),
 		*Node->GetNodeTitle(ENodeTitleType::FullTitle).ToString(), BackwardDepth, ForwardDepth);
 
-	// Trace local execution flow (same graph only)
-	FExecFlowMap FlowMap = FCrossBPExecTracer::TraceFromNode(Node, BackwardDepth, ForwardDepth);
+	// Clear any active causality chain before rebuilding
+	ClearCausalChain();
 
-	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Trace returned %d groups, %d edges"),
-		FlowMap.Groups.Num(), FlowMap.Edges.Num());
+	// Trace local execution flow
+	CurrentFlowMap = FCrossBPExecTracer::TraceFromNode(Node, BackwardDepth, ForwardDepth);
+
+	// Populate data-pin dependency edges for causality queries
+	FCausalityAnalyzer::PopulateDataEdges(CurrentFlowMap);
+
+	// Alias for readability in the rest of this function
+	FExecFlowMap& FlowMap = CurrentFlowMap;
+
+	UE_LOG(LogExecLocalPathWidget, Log, TEXT("Rebuild: Trace returned %d groups, %d edges, %d data edges"),
+		FlowMap.Groups.Num(), FlowMap.Edges.Num(), FlowMap.DataEdges.Num());
 
 	if (FlowMap.Groups.Num() == 0)
 	{
@@ -348,8 +370,90 @@ void SExecLocalPathWidget::SetupRerootCallbacks()
 				if (TSharedPtr<SExecLocalPathWidget> Pinned = WeakSelf.Pin())
 					Pinned->SetTargetNode(InNode);
 			};
+
+			ExecNode->CausalityCallback = [WeakSelf](int32 OrigGroupIdx, int32 OrigFuncIdx)
+			{
+				if (TSharedPtr<SExecLocalPathWidget> Pinned = WeakSelf.Pin())
+					Pinned->OnCausalityClicked(OrigGroupIdx, OrigFuncIdx);
+			};
 		}
 	}
+}
+
+// -----------------------------------------------------------------------
+//  Causality chain
+// -----------------------------------------------------------------------
+void SExecLocalPathWidget::OnCausalityClicked(int32 OrigGroupIdx, int32 OrigFuncIdx)
+{
+	// Toggle off if clicking the same anchor twice
+	if (bHasActiveCausalChain
+		&& CausalAnchorGroupIdx == OrigGroupIdx
+		&& CausalAnchorFuncIdx  == OrigFuncIdx)
+	{
+		ClearCausalChain();
+		return;
+	}
+
+	ActiveCausalChain     = FCausalityAnalyzer::ComputeChain(CurrentFlowMap, OrigGroupIdx, OrigFuncIdx);
+	bHasActiveCausalChain = true;
+	CausalAnchorGroupIdx  = OrigGroupIdx;
+	CausalAnchorFuncIdx   = OrigFuncIdx;
+
+	ApplyCausalHighlighting();
+}
+
+void SExecLocalPathWidget::ClearCausalChain()
+{
+	if (!bHasActiveCausalChain) return;
+
+	bHasActiveCausalChain = false;
+	ActiveCausalChain     = FCausalityResult{};
+	CausalAnchorGroupIdx  = INDEX_NONE;
+	CausalAnchorFuncIdx   = INDEX_NONE;
+
+	// Reset every node's causality flags
+	if (FlowGraph)
+	{
+		for (UEdGraphNode* GNode : FlowGraph->Nodes)
+		{
+			if (UExecFlowGraphNode* ExecNode = Cast<UExecFlowGraphNode>(GNode))
+			{
+				ExecNode->bIsInCausalChain     = false;
+				ExecNode->bIsDimmedByCausality = false;
+			}
+		}
+		FlowGraph->NotifyGraphChanged();
+	}
+}
+
+void SExecLocalPathWidget::ApplyCausalHighlighting()
+{
+	if (!FlowGraph) return;
+
+	for (UEdGraphNode* GNode : FlowGraph->Nodes)
+	{
+		UExecFlowGraphNode* ExecNode = Cast<UExecFlowGraphNode>(GNode);
+		if (!ExecNode) continue;
+
+		const bool bCausal = ActiveCausalChain.CausalNodes.Contains(
+			MakeTuple(ExecNode->OrigGroupIdx, ExecNode->OrigFuncIdx));
+
+		ExecNode->bIsInCausalChain     = bCausal;
+		ExecNode->bIsDimmedByCausality = !bCausal;
+	}
+
+	FlowGraph->NotifyGraphChanged();
+}
+
+EVisibility SExecLocalPathWidget::GetClearCausalityVisibility() const
+{
+	return bHasActiveCausalChain ? EVisibility::Visible : EVisibility::Collapsed;
+}
+
+FReply SExecLocalPathWidget::OnClearCausalityClicked()
+{
+	ClearCausalChain();
+	return FReply::Handled();
 }
 
 // -----------------------------------------------------------------------
