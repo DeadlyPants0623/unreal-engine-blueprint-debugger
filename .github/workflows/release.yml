@@ -140,48 +140,6 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Release notes from CHANGELOG
-        shell: bash
-        run: |
-          VERSION="${{ needs.version.outputs.version }}"
-          CHANGELOG="Plugins/BPExecFlowViewer/CHANGELOG.md"
-          START="## [${VERSION}]"
-          SECTION_FILE="$(mktemp)"
-
-          in_section=0
-          while IFS= read -r line || [[ -n "$line" ]]; do
-            if [[ "$line" == "$START" ]]; then
-              in_section=1
-              continue
-            fi
-            if [[ $in_section -eq 1 && "$line" == "## ["* ]]; then
-              break
-            fi
-            if [[ $in_section -eq 1 ]]; then
-              printf '%s\n' "$line"
-            fi
-          done < "$CHANGELOG" > "$SECTION_FILE"
-
-          if [[ ! -s "$SECTION_FILE" ]]; then
-            echo "No CHANGELOG section for ${VERSION} (expected heading: ${START})" >&2
-            exit 1
-          fi
-
-          {
-            echo "## Blueprint Exec Flow Viewer ${VERSION}"
-            echo ""
-            echo "**Requires Unreal Engine 5.7** (C++ project)."
-            echo ""
-            echo "### Downloads"
-            echo "- \`BPExecFlowViewer-${VERSION}-source.zip\` — drop into \`YourProject/Plugins/\` and compile"
-            echo "- \`BPExecFlowViewer-${VERSION}-Win64.zip\` — prebuilt editor binaries (when published)"
-            echo ""
-            cat "$SECTION_FILE"
-          } > release-body.md
-          cat release-body.md
-
       - name: Download source zip
         uses: actions/download-artifact@v8
         with:
@@ -197,8 +155,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          name: Blueprint Exec Flow Viewer v${{ needs.version.outputs.version }}
-          body_path: release-body.md
-          generate_release_notes: false
+          generate_release_notes: true
           files: release-files/**
           fail_on_unmatched_files: true
