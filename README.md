@@ -80,12 +80,26 @@ GitHub’s cloud runners do **not** have your `C:\Program Files\Epic Games\UE_5.
 5. Value: `C:\Program Files\Epic Games\UE_5.7`  
 6. **Add secret**
 
-**2. Register this PC as a self-hosted runner** (same repo):
+**2. Use one self-hosted runner for multiple repos (organization)**
 
-1. **Settings** → **Actions** → **Runners** → **New self-hosted runner**  
-2. Choose **Windows** and follow the commands (download, configure, run `run.cmd` in the runner folder).  
-3. Leave the runner app running (or install it as a service) so jobs can start when you push a tag.
+Repo-level runners (e.g. only `AdvancedAIDemo`) do **not** see jobs from other repositories. To use `C:\actions-runner` for **both** this plugin and another repo, register it once at the **GitHub organization** level:
 
-The Win64 job uses `runs-on: self-hosted`, so it only runs on that machine — where `UE_ROOT` must point to your real UE install.
+1. Create or use a GitHub **Organization** that owns both repositories (Settings → transfer repo, or create the org and add repos).
+2. Org → **Settings** → **Actions** → **Runners** → **New self-hosted runner** → Windows.
+3. On your PC (reuse existing install):
 
-If you skip step 2, releases still publish the **source zip** only (enough for most users).
+   ```powershell
+   cd C:\actions-runner
+   .\config.cmd remove    # disconnects the old repo-only registration
+   .\config.cmd --url https://github.com/YOUR_ORG_NAME --token PASTE_TOKEN_FROM_GITHUB
+   .\run.cmd
+   ```
+
+4. In the org runner settings, allow access to **unreal-engine-blueprint-debugger** and **AdvancedAIDemo** (or “All repositories”).
+5. Set secret **`UE_ROOT`** = `C:\Program Files\Epic Games\UE_5.7` on **each** repo that runs the Win64 release job (repo → Settings → Secrets → Actions).
+
+The Win64 job uses `runs-on: self-hosted`. The runner must be **Online** when you push a version tag.
+
+**No organization?** You can run two registrations on the same PC (e.g. `C:\actions-runner` + `C:\actions-runner-bpexec`) — two `run.cmd` processes — one per repo. That is still one machine, but not one GitHub runner registration.
+
+If you skip runner setup, releases still publish the **source zip** only (enough for most users).
