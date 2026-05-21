@@ -1,21 +1,28 @@
 # Unreal Engine Blueprint Debugger
 
-Editor plugin for **Unreal Engine 5.7** that visualizes Blueprint execution flow from any graph node.
+Editor plugin for **Unreal Engine 5.7** — visualize Blueprint execution flow from any graph node.
 
-## Plugin
+## Repository layout
 
-All product code and documentation live here:
+This repository contains **only** the plugin:
 
-**[`Plugins/BPExecFlowViewer/`](Plugins/BPExecFlowViewer/README.md)**
+```
+Plugins/BPExecFlowViewer/
+```
 
-## Distribution
+Documentation, source, and releases live there. The game project files in a parent folder (if present) are **not** versioned.
 
-| Channel | Notes |
-|---------|--------|
-| **GitHub** | Copy `Plugins/BPExecFlowViewer/` into your project, or clone this repo |
-| **Fab** | Install from the Fab marketplace (free listing) |
+## Install
 
-Requires UE **5.7** and a **C++ project** (or generated project files) so the editor can compile the plugin.
+```bash
+git clone https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger.git Plugins/BPExecFlowViewer
+```
+
+Or download a release zip and extract it to `YourProject/Plugins/BPExecFlowViewer/`.
+
+Then enable **Blueprint Exec Flow Viewer** under **Edit → Plugins** in UE 5.7 and restart the editor.
+
+Full details: [`Plugins/BPExecFlowViewer/README.md`](Plugins/BPExecFlowViewer/README.md)
 
 ## Support
 
