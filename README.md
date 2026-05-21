@@ -65,4 +65,27 @@ git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The workflow uploads a **source zip** on every tag. A **Win64 prebuilt zip** is added when the repository secret **`UE_ROOT`** is set to your UE 5.7 install path on a **self-hosted Windows runner** (for example `C:\Program Files\Epic Games\UE_5.7`). GitHub-hosted runners cannot install Unreal Engine automatically due to size and licensing.
+The workflow uploads a **source zip** on every tag. A **Win64 prebuilt zip** is optional and requires two setup steps on your PC (see below).
+
+### Optional: Win64 prebuilt releases (your PC as the build machine)
+
+GitHub’s cloud runners do **not** have your `C:\Program Files\Epic Games\UE_5.7` install. To build the Win64 zip in CI, use your own Windows machine as a **self-hosted runner**.
+
+**1. Add the `UE_ROOT` secret** (repo on GitHub):
+
+1. Open https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger  
+2. **Settings** → **Secrets and variables** → **Actions**  
+3. **New repository secret**  
+4. Name: `UE_ROOT`  
+5. Value: `C:\Program Files\Epic Games\UE_5.7`  
+6. **Add secret**
+
+**2. Register this PC as a self-hosted runner** (same repo):
+
+1. **Settings** → **Actions** → **Runners** → **New self-hosted runner**  
+2. Choose **Windows** and follow the commands (download, configure, run `run.cmd` in the runner folder).  
+3. Leave the runner app running (or install it as a service) so jobs can start when you push a tag.
+
+The Win64 job uses `runs-on: self-hosted`, so it only runs on that machine — where `UE_ROOT` must point to your real UE install.
+
+If you skip step 2, releases still publish the **source zip** only (enough for most users).

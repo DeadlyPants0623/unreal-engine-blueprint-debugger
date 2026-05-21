@@ -2,11 +2,11 @@
 #
 # Assets:
 #   - BPExecFlowViewer-X.Y.Z-source.zip  — always (drop into Plugins/ and compile in UE 5.7)
-#   - BPExecFlowViewer-X.Y.Z-Win64.zip   — optional, when repository secret UE_ROOT is set
-#     (use a self-hosted Windows runner with UE 5.7 installed, e.g. C:\Program Files\Epic Games\UE_5.7)
+#   - BPExecFlowViewer-X.Y.Z-Win64.zip   — optional; requires a self-hosted Windows runner on the
+#     machine where UE is installed, plus repository secret UE_ROOT (see README).
 #
-# Repository secret (optional):
-#   UE_ROOT — absolute path to UE 5.7 on the runner (forward slashes or backslashes)
+# Repository secret (required for Win64 job):
+#   UE_ROOT — e.g. C:\Program Files\Epic Games\UE_5.7 (must exist on the self-hosted runner PC)
 
 name: Release
 
@@ -69,7 +69,8 @@ jobs:
 
   build-win64:
     name: Build Win64 package
-    runs-on: windows-latest
+    # Must run on YOUR Windows PC (self-hosted), not GitHub's cloud runners — UE is not on those machines.
+    runs-on: self-hosted
     needs: package-source
     if: >-
       secrets.UE_ROOT != ''
