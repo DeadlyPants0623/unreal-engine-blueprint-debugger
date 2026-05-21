@@ -524,9 +524,6 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 	RenderGroups.Reserve(FlowMap.Groups.Num());
 	TMap<int32, TArray<int32>> OriginalToRender;
 
-	// Maps render index → (OrigGroupIdx, OrigFuncIdx) for causality tracking.
-	TArray<TPair<int32, int32>> RenderIdxToOrigEntry;
-
 	for (int32 GroupIdx = 0; GroupIdx < FlowMap.Groups.Num(); ++GroupIdx)
 	{
 		const FExecBPGroup& SourceGroup = FlowMap.Groups[GroupIdx];
@@ -535,8 +532,6 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 		{
 			const int32 RenderIdx = RenderGroups.Add(SourceGroup);
 			OriginalToRender.FindOrAdd(GroupIdx).Add(RenderIdx);
-			RenderIdxToOrigEntry.SetNum(RenderIdx + 1);
-			RenderIdxToOrigEntry[RenderIdx] = TPair<int32, int32>(GroupIdx, 0);
 			continue;
 		}
 
@@ -550,8 +545,6 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 
 			const int32 RenderIdx = RenderGroups.Add(MoveTemp(SingleEntryGroup));
 			OriginalToRender.FindOrAdd(GroupIdx).Add(RenderIdx);
-			RenderIdxToOrigEntry.SetNum(RenderIdx + 1);
-			RenderIdxToOrigEntry[RenderIdx] = TPair<int32, int32>(GroupIdx, FuncIdx);
 		}
 	}
 
@@ -850,11 +843,6 @@ bool UExecFlowGraph::PopulateGraph(UExecFlowGraph* Graph, const FExecFlowMap& Fl
 
 			UExecFlowGraphNode* NewNode = NewObject<UExecFlowGraphNode>(Graph);
 			NewNode->GroupData = RenderGroups[GIdx];
-			if (RenderIdxToOrigEntry.IsValidIndex(GIdx))
-			{
-				NewNode->OrigGroupIdx = RenderIdxToOrigEntry[GIdx].Key;
-				NewNode->OrigFuncIdx  = RenderIdxToOrigEntry[GIdx].Value;
-			}
 			NewNode->NodePosX = FMath::RoundToInt(X);
 			NewNode->NodePosY = FMath::RoundToInt(CenterY - (0.5f * H));
 			const float NodeLeft = static_cast<float>(NewNode->NodePosX);

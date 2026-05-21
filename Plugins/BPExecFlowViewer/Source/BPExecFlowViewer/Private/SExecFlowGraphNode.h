@@ -26,9 +26,8 @@ public:
 	virtual void UpdateGraphNode() override;
 
 private:
-	/** Build one clickable row for a function / event / macro entry.
-	 *  FuncIdx is the entry's position within the group — used for causality wiring. */
-	TSharedRef<SWidget> BuildFuncRow(const FExecFuncEntry& Entry, int32 FuncIdx);
+	/** Build one clickable row for a function / event / macro entry. */
+	TSharedRef<SWidget> BuildFuncRow(const FExecFuncEntry& Entry);
 };
 
 // -----------------------------------------------------------------------

@@ -5,7 +5,6 @@
 #include "UObject/GCObject.h"
 #include "ExecFlowGraph.h"
 #include "ExecFlowTypes.h"
-#include "CausalityAnalyzer.h"
 
 class UEdGraphNode;
 class SGraphEditor;
@@ -48,16 +47,8 @@ private:
 	TSharedRef<SWidget> CreateGraphEditorWidget();
 	void PostProcessWithGraphEditor();
 	EVisibility GetErrorVisibility() const;
-	EVisibility GetClearCausalityVisibility() const;
 
 	FReply OnRebuildClicked();
-	FReply OnClearCausalityClicked();
-
-	// Called by each node's CausalityCallback. Toggles chain on/off.
-	void OnCausalityClicked(int32 OrigGroupIdx, int32 OrigFuncIdx);
-	void ClearCausalChain();
-	// Applies bIsInCausalChain / bIsDimmedByCausality to every graph node.
-	void ApplyCausalHighlighting();
 
 	// ---- Members ----
 	TObjectPtr<UExecFlowGraph>   FlowGraph;
@@ -73,14 +64,4 @@ private:
 
 	TSharedPtr<SOverlay> GraphOverlay;
 	TSharedPtr<SWidget>  ClusterOverlay;
-
-	// Last traced flow map — kept alive for causality queries.
-	FExecFlowMap CurrentFlowMap;
-
-	// Active causality chain state.
-	FCausalityResult ActiveCausalChain;
-	bool             bHasActiveCausalChain = false;
-	// (OrigGroupIdx, OrigFuncIdx) of the row that triggered the current chain.
-	int32 CausalAnchorGroupIdx = INDEX_NONE;
-	int32 CausalAnchorFuncIdx  = INDEX_NONE;
 };

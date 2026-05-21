@@ -1,0 +1,33 @@
+# Validates plugin source packaging (same zip layout as releases). No UE compile — runs on GitHub-hosted Linux.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - plugin-only
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - plugin-only
+
+jobs:
+  package-source:
+    name: Package source (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Zip plugin source
+        id: package
+        uses: ./.github/actions/package-plugin-source
+        with:
+          version: ci
+
+      - name: Verify archive
+        shell: bash
+        run: |
+          test -f Plugins/BPExecFlowViewer/BPExecFlowViewer.uplugin
+          unzip -l "${{ steps.package.outputs.zip_path }}" | head -30
