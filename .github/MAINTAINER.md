@@ -12,7 +12,7 @@ The [release workflow](workflows/release.yml) fires on every `v*` tag and runs f
 1. **Resolve version** — strips the `v` prefix from the tag.
 2. **Package source zip** — runs on GitHub-hosted Ubuntu; no UE install needed.
 3. **Build Win64 package** — runs on your self-hosted Windows runner; compiles the plugin via `RunUAT BuildPlugin`. **Both the source and Win64 jobs must succeed** — `continue-on-error` is off, so a failed build blocks the release.
-4. **Publish GitHub Release** — attaches both zips and auto-generates release notes.
+4. **Publish GitHub Release** — attaches both zips; description is built from `Plugins/BPExecFlowViewer/CHANGELOG.md` (not GitHub’s PR/contributor auto-notes).
 
 ### Artifacts produced
 
