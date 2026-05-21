@@ -68,7 +68,7 @@ jobs:
           arch: x64
 
       - name: Verify UE_ROOT
-        shell: pwsh
+        shell: powershell
         run: |
           if ([string]::IsNullOrWhiteSpace($env:UE_ROOT)) {
             throw "UE_ROOT secret is empty. Set it in repo Settings -> Secrets -> Actions."
@@ -78,7 +78,7 @@ jobs:
           Write-Host "Using UE at: $env:UE_ROOT"
 
       - name: Build plugin (RunUAT)
-        shell: pwsh
+        shell: powershell
         env:
           PACKAGE_OUT: ${{ github.workspace }}\_package\BPExecFlowViewer
         run: |
@@ -87,7 +87,7 @@ jobs:
 
       - name: Zip Win64 package
         id: zip
-        shell: pwsh
+        shell: powershell
         run: |
           $version = "${{ needs.version.outputs.version }}"
           $archive = "BPExecFlowViewer-${version}-Win64.zip"
