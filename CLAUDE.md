@@ -4,23 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **Unreal Engine 5.7** project (`MyCity`) with editor plugins under `Plugins/`.
+This is an **Unreal Engine 5.7** project (`MyCity`) used to develop and test the **BPExecFlowViewer** editor plugin.
 
-### BPExecFlowViewer (Fab / primary)
+### BPExecFlowViewer
 
 Standalone editor plugin: [`Plugins/BPExecFlowViewer/`](Plugins/BPExecFlowViewer/)
 
 - **Module:** `BPExecFlowViewer` (Editor only)
 - Blueprint execution flow tracer and graph viewer
-- Packaged for Fab; see `README.md` and `CHANGELOG.md` in the plugin folder
+- Distributed on **Fab** and **GitHub** ([repo](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger))
+- Docs / support URLs in `.uplugin` point at GitHub README and Issues
 
-### BPHealthAnalyzer (local only)
+### Other plugins in this repo
 
-[`Plugins/BPHealthAnalyzer/`](Plugins/BPHealthAnalyzer/) — toolbar + health analysis scaffold. **Not** included in the Fab zip. Enable separately in `.uproject` if needed.
-
-### Other plugins
-
-- [`Plugins/RiotDiagnostics/`](Plugins/RiotDiagnostics/) — unrelated; never bundle with Fab artifacts
+- [`Plugins/RiotDiagnostics/`](Plugins/RiotDiagnostics/) — separate diagnostics plugin; do not bundle with Fab/GitHub releases of BPExecFlowViewer
 
 ## Build & Compile
 
