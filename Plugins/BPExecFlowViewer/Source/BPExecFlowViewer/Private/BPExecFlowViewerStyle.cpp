@@ -1,8 +1,8 @@
 #include "BPExecFlowViewerStyle.h"
 
+#include "Brushes/SlateImageBrush.h"
 #include "Interfaces/IPluginManager.h"
 #include "Styling/SlateStyleRegistry.h"
-#include "Styling/SlateStyleMacros.h"
 
 TSharedPtr<FSlateStyleSet> FBPExecFlowViewerStyle::StyleSet;
 
@@ -20,8 +20,12 @@ void FBPExecFlowViewerStyle::Initialize()
 
 	const FVector2D Icon16Size(16.f, 16.f);
 	const FVector2D Icon128Size(128.f, 128.f);
-	StyleSet->Set("BPExecFlowViewer.Icon16", new IMAGE_BRUSH("Icon16", Icon16Size));
-	StyleSet->Set("BPExecFlowViewer.Icon128", new IMAGE_BRUSH("Icon128", Icon128Size));
+	StyleSet->Set(
+		"BPExecFlowViewer.Icon16",
+		new FSlateImageBrush(StyleSet->RootToContentDir(TEXT("Icon16.png")), Icon16Size));
+	StyleSet->Set(
+		"BPExecFlowViewer.Icon128",
+		new FSlateImageBrush(StyleSet->RootToContentDir(TEXT("Icon128.png")), Icon128Size));
 
 	FSlateStyleRegistry::RegisterSlateStyle(*StyleSet);
 }
