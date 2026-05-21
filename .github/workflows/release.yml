@@ -81,7 +81,7 @@ jobs:
 
       - name: Version
         id: version
-        shell: pwsh
+        shell: powershell
         run: |
           if ($env:GITHUB_REF -like 'refs/tags/v*') {
             $v = $env:GITHUB_REF -replace 'refs/tags/v',''
@@ -96,7 +96,7 @@ jobs:
           arch: x64
 
       - name: RunUAT BuildPlugin
-        shell: pwsh
+        shell: powershell
         run: |
           $plugin = Join-Path $env:GITHUB_WORKSPACE "${{ env.PLUGIN_FILE }}"
           $out = Join-Path $env:GITHUB_WORKSPACE "_package\BPExecFlowViewer"
@@ -109,7 +109,7 @@ jobs:
 
       - name: Zip Win64 package
         id: zip
-        shell: pwsh
+        shell: powershell
         run: |
           $version = "${{ steps.version.outputs.version }}"
           $archive = "BPExecFlowViewer-${version}-Win64.zip"
