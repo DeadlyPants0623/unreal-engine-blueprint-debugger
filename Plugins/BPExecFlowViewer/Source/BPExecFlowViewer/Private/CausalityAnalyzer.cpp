@@ -51,7 +51,7 @@ void FCausalityAnalyzer::PopulateDataEdges(FExecFlowMap& FlowMap)
 
 				while (Frontier.Num() > 0)
 				{
-					UEdGraphPin* Current = Frontier.Pop(/*bAllowShrinking=*/false);
+					UEdGraphPin* Current = Frontier.Pop(EAllowShrinking::No);
 					if (VisitedPins.Contains(Current)) continue;
 					VisitedPins.Add(Current);
 
@@ -127,7 +127,7 @@ FCausalityResult FCausalityAnalyzer::ComputeChain(
 
 	while (Queue.Num() > 0)
 	{
-		const TTuple<int32, int32> Current = Queue.Pop(/*bAllowShrinking=*/false);
+		const TTuple<int32, int32> Current = Queue.Pop(EAllowShrinking::No);
 		const int32 CurG = Current.Get<0>();
 		const int32 CurF = Current.Get<1>();
 
