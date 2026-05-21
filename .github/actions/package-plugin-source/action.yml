@@ -1,0 +1,34 @@
+name: Package plugin source
+description: Zip BPExecFlowViewer source (same exclusions as release / CI)
+
+inputs:
+  version:
+    description: Version string (use "ci" for CI smoke zip name)
+    required: true
+
+outputs:
+  zip_path:
+    description: Filename of the created zip at repo root
+    value: ${{ steps.package.outputs.zip_path }}
+
+runs:
+  using: composite
+  steps:
+    - id: package
+      shell: bash
+      run: |
+        VERSION="${{ inputs.version }}"
+        if [[ "$VERSION" == "ci" ]]; then
+          OUT="BPExecFlowViewer-ci-source.zip"
+        else
+          OUT="BPExecFlowViewer-${VERSION}-source.zip"
+        fi
+        cd Plugins/BPExecFlowViewer
+        zip -r "../../${OUT}" . \
+          -x "Binaries/*" \
+          -x "Intermediate/*" \
+          -x ".vs/*" \
+          -x "*.sln" \
+          -x "*.suo"
+        cd ../..
+        echo "zip_path=${OUT}" >> "$GITHUB_OUTPUT"

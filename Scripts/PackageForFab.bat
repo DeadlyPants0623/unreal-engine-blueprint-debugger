@@ -5,7 +5,8 @@ REM Set UE_ROOT to your UE 5.7 install before running.
 if "%UE_ROOT%"=="" set UE_ROOT=C:\Program Files\Epic Games\UE_5.7
 
 set PLUGIN=%~dp0..\Plugins\BPExecFlowViewer\BPExecFlowViewer.uplugin
-set OUT=%~dp0..\Packaged\BPExecFlowViewer
+if "%PACKAGE_OUT%"=="" set PACKAGE_OUT=%~dp0..\Packaged\BPExecFlowViewer
+set OUT=%PACKAGE_OUT%
 
 echo Plugin: %PLUGIN%
 echo Output: %OUT%
