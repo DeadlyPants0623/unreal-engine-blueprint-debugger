@@ -4,6 +4,8 @@
 
 Visualize **upstream and downstream Blueprint execution flow** from any node — in one dockable, read-only graph. Right-click a node in the Blueprint Editor and choose **View Exec Flow**.
 
+**Get it:** [Fab](https://www.fab.com/) (search *Blueprint Exec Flow Viewer*) · [GitHub](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger) · [Issues / support](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/issues)
+
 ---
 
 ## Features
@@ -21,7 +23,7 @@ Visualize **upstream and downstream Blueprint execution flow** from any node —
 
 ### From GitHub
 
-1. Clone [unreal-engine-blueprint-debugger](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger) or copy only `Plugins/BPExecFlowViewer/` into your project’s `Plugins/` folder (no `Binaries/` or `Intermediate/`).
+1. Clone [unreal-engine-blueprint-debugger](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger) or copy only `Plugins/BPExecFlowViewer/` into your project's `Plugins/` folder (no `Binaries/` or `Intermediate/`).
 2. Open the project in **Unreal Engine 5.7** (C++ project, or add a C++ class so the editor compiles plugins).
 3. **Edit → Plugins** → search **Blueprint Exec Flow Viewer** → enable → restart.
 4. Let the editor compile the plugin on first launch.
@@ -90,4 +92,4 @@ MIT — see [LICENSE](LICENSE).
 
 ## Support
 
-Set `SupportURL` in `BPExecFlowViewer.uplugin` before publishing to Fab.
+Questions and bugs: [GitHub Issues](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/issues).
