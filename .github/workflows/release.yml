@@ -80,10 +80,18 @@ jobs:
           "UE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Using UE at: $root"
 
+      # RunUAT paths under GITHUB_WORKSPACE exceed Windows MAX_PATH (~260). Build on a short fixed path.
+      - name: Prepare package directory
+        shell: powershell
+        run: |
+          $out = 'C:\_ci\bpefv'
+          if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          "PACKAGE_OUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "PACKAGE_OUT=$out"
+
       - name: Build plugin (RunUAT)
         shell: powershell
-        env:
-          PACKAGE_OUT: ${{ github.workspace }}\_package\BPExecFlowViewer
         run: |
           & "${{ github.workspace }}\Scripts\PackageForFab.bat"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -94,8 +102,8 @@ jobs:
         run: |
           $version = "${{ needs.version.outputs.version }}"
           $archive = "BPExecFlowViewer-${version}-Win64.zip"
-          $root = Join-Path $env:GITHUB_WORKSPACE "_package\BPExecFlowViewer"
-          if (-not (Test-Path $root)) { throw "Package folder missing: $root" }
+          $root = $env:PACKAGE_OUT
+          if (-not (Test-Path -LiteralPath $root)) { throw "Package folder missing: $root" }
           Compress-Archive -Path (Join-Path $root '*') -DestinationPath (Join-Path $env:GITHUB_WORKSPACE $archive) -Force
           "win64_zip=$archive" >> $env:GITHUB_OUTPUT
 
