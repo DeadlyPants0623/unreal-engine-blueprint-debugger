@@ -23,7 +23,11 @@ Visualize **upstream and downstream Blueprint execution flow** from any node —
 
 ### From GitHub
 
-1. Clone [unreal-engine-blueprint-debugger](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger) or copy only `Plugins/BPExecFlowViewer/` into your project's `Plugins/` folder (no `Binaries/` or `Intermediate/`).
+```bash
+git clone https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger.git Plugins/BPExecFlowViewer
+```
+
+Or download a release and extract to `YourProject/Plugins/BPExecFlowViewer/` (no `Binaries/` or `Intermediate/`).
 2. Open the project in **Unreal Engine 5.7** (C++ project, or add a C++ class so the editor compiles plugins).
 3. **Edit → Plugins** → search **Blueprint Exec Flow Viewer** → enable → restart.
 4. Let the editor compile the plugin on first launch.

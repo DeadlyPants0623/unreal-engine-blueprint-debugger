@@ -1,19 +1,31 @@
-﻿# Fab / UAT package output
+﻿# --- This repo versions only Plugins/BPExecFlowViewer (see README) ---
+# When the git root is inside a UE game project, ignore the game itself:
+
+/MyCity.uproject
+/Content/
+/Config/
+/Source/
+/Binaries/
+/DerivedDataCache/
+/Intermediate/
+/Saved/
+/.vs/
+/.idea/
+/.vsconfig
+/CLAUDE.md
+/Packaged/
+
+# Other local plugins (not part of this repository)
+/Plugins/RiotDiagnostics/
+
+# Fab / UAT package output
 Packaged/
 
-# Unreal Engine project ignores
-Binaries/
-DerivedDataCache/
-Intermediate/
-Saved/
-
-# Plugin generated folders
-Plugins/*/Binaries/
-Plugins/*/Intermediate/
+# Plugin build artifacts (also covered by FilterPlugin.ini for releases)
+Plugins/BPExecFlowViewer/Binaries/
+Plugins/BPExecFlowViewer/Intermediate/
 
 # IDE / tool metadata
-.vs/
-.idea/
 *.VC.db
 *.VC.opendb
 *.suo
@@ -27,9 +39,6 @@ Plugins/*/Intermediate/
 
 # User-specific settings
 *.DotSettings.user
-
-# Unreal local-only content
-Content/Developers/*
 
 # Logs and transient files
 *.log
@@ -51,3 +60,6 @@ package-lock.json
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Misc local files
+riot_uneco_takehome_assignment.html
