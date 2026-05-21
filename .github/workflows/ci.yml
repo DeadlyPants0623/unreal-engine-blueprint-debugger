@@ -1,0 +1,30 @@
+# Validates that the plugin source can be packaged (same layout as release source zip).
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - plugin-only
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+      - plugin-only
+
+jobs:
+  package-source:
+    name: Package source (smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Zip plugin source
+        shell: bash
+        run: |
+          cd Plugins/BPExecFlowViewer
+          zip -r ../../BPExecFlowViewer-ci-source.zip . \
+            -x "Binaries/*" -x "Intermediate/*" -x ".vs/*"
+          unzip -l ../../BPExecFlowViewer-ci-source.zip | head -30
+          test -f BPExecFlowViewer.uplugin

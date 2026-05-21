@@ -4,7 +4,7 @@
 
 Visualize **upstream and downstream Blueprint execution flow** from any node — in one dockable, read-only graph. Right-click a node in the Blueprint Editor and choose **View Exec Flow**.
 
-**Get it:** [Fab](https://www.fab.com/) (search *Blueprint Exec Flow Viewer*) · [GitHub](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger) · [Issues / support](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/issues)
+**Get it:** [GitHub Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) · [Fab](https://www.fab.com/) · [Issues / support](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/issues)
 
 ---
 
@@ -21,20 +21,29 @@ Visualize **upstream and downstream Blueprint execution flow** from any node —
 
 ## Installation
 
-### From GitHub
+Requires **UE 5.7** and a **C++ project** (or a one-time “Add C++ Class” so the editor can compile plugins).
+
+### From GitHub Releases (recommended)
+
+1. Open [Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) and download the latest **`BPExecFlowViewer-*-source.zip`** (or **`*-Win64.zip`** for a prebuilt Win64 editor build when available).
+2. Extract into your project so you have `YourProject/Plugins/BPExecFlowViewer/` (the folder must contain `BPExecFlowViewer.uplugin`). Do **not** nest an extra folder level.
+3. Open the project in Unreal Engine 5.7.
+4. **Edit → Plugins** → search **Blueprint Exec Flow Viewer** → **Enable** → restart when prompted.
+5. Let the editor compile the plugin on first enable (source zip), or use the prebuilt binaries (Win64 zip).
+
+### From Git (clone)
+
+From your Unreal project directory:
 
 ```bash
 git clone https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger.git Plugins/BPExecFlowViewer
 ```
 
-Or download a release and extract to `YourProject/Plugins/BPExecFlowViewer/` (no `Binaries/` or `Intermediate/`).
-2. Open the project in **Unreal Engine 5.7** (C++ project, or add a C++ class so the editor compiles plugins).
-3. **Edit → Plugins** → search **Blueprint Exec Flow Viewer** → enable → restart.
-4. Let the editor compile the plugin on first launch.
+Then repeat steps 3–5 above.
 
 ### From Fab
 
-Install via the Fab library into your project, then enable the plugin and restart the editor. Same UE **5.7** and C++ compile requirements apply.
+Install from the Fab library into your project, enable the plugin, and restart the editor. Same UE **5.7** and C++ requirements apply.
 
 ---
 
