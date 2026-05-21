@@ -1,6 +1,6 @@
 # Tag push (v*) or manual dispatch → source zip on every tag; Win64 zip optional via self-hosted Windows runner.
 #
-# Secret (Win64 job only): UE_ROOT — e.g. C:\Program Files\Epic Games\UE_5.7
+# Win64 job: UE_ROOT from Actions secret, runner env, or C:\Program Files\Epic Games\UE_5.7
 
 name: Release
 
@@ -57,8 +57,6 @@ jobs:
     needs: version
     runs-on: self-hosted
     continue-on-error: true
-    env:
-      UE_ROOT: ${{ secrets.UE_ROOT }}
     steps:
       - uses: actions/checkout@v4
 
@@ -67,15 +65,20 @@ jobs:
         with:
           arch: x64
 
-      - name: Verify UE_ROOT
+      # Do not set job env UE_ROOT from secrets alone — an unset secret becomes "" and
+      # wipes the runner machine's UE_ROOT. Order: secret → runner env → default UE 5.7 path.
+      - name: Resolve UE_ROOT
         shell: powershell
         run: |
-          if ([string]::IsNullOrWhiteSpace($env:UE_ROOT)) {
-            throw "UE_ROOT secret is empty. Set it in repo Settings -> Secrets -> Actions."
+          $root = '${{ secrets.UE_ROOT }}'
+          if ([string]::IsNullOrWhiteSpace($root)) { $root = $env:UE_ROOT }
+          if ([string]::IsNullOrWhiteSpace($root)) { $root = 'C:\Program Files\Epic Games\UE_5.7' }
+          $uat = Join-Path $root 'Engine\Build\BatchFiles\RunUAT.bat'
+          if (-not (Test-Path $uat)) {
+            throw "RunUAT not found at: $uat. Set Actions secret UE_ROOT, runner env UE_ROOT, or install UE 5.7 at the default path."
           }
-          $uat = Join-Path $env:UE_ROOT "Engine\Build\BatchFiles\RunUAT.bat"
-          if (-not (Test-Path $uat)) { throw "RunUAT not found at: $uat" }
-          Write-Host "Using UE at: $env:UE_ROOT"
+          "UE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Using UE at: $root"
 
       - name: Build plugin (RunUAT)
         shell: powershell
