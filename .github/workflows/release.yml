@@ -19,6 +19,8 @@ permissions:
 
 env:
   PLUGIN_FILE: Plugins/BPExecFlowViewer/BPExecFlowViewer.uplugin
+  # Filesystem-safe slug for release zips and Actions artifacts (FriendlyName: Blueprint Exec Flow Viewer)
+  PRODUCT_SLUG: Blueprint-Exec-Flow-Viewer
 
 jobs:
 
@@ -55,11 +57,12 @@ jobs:
         uses: ./.github/actions/package-plugin-source
         with:
           version: ${{ needs.version.outputs.version }}
+          product_slug: ${{ env.PRODUCT_SLUG }}
 
       - name: Upload source artifact
         uses: actions/upload-artifact@v7
         with:
-          name: source-zip
+          name: ${{ env.PRODUCT_SLUG }}-source
           path: ${{ steps.package.outputs.zip_path }}
           if-no-files-found: error
 
@@ -117,7 +120,8 @@ jobs:
         shell: powershell
         run: |
           $version = "${{ needs.version.outputs.version }}"
-          $archive = "BPExecFlowViewer-${version}-Win64.zip"
+          $slug = "${{ env.PRODUCT_SLUG }}"
+          $archive = "${slug}-${version}-Win64.zip"
           $root = $env:PACKAGE_OUT
           if (-not (Test-Path -LiteralPath $root)) { throw "Package folder missing: $root" }
           Compress-Archive -Path (Join-Path $root '*') -DestinationPath (Join-Path $env:GITHUB_WORKSPACE $archive) -Force
@@ -126,7 +130,7 @@ jobs:
       - name: Upload Win64 artifact
         uses: actions/upload-artifact@v7
         with:
-          name: win64-zip
+          name: ${{ env.PRODUCT_SLUG }}-Win64
           path: ${{ steps.zip.outputs.win64_zip }}
           if-no-files-found: error
 
@@ -143,13 +147,13 @@ jobs:
       - name: Download source zip
         uses: actions/download-artifact@v8
         with:
-          name: source-zip
+          name: ${{ env.PRODUCT_SLUG }}-source
           path: release-files
 
       - name: Download Win64 zip
         uses: actions/download-artifact@v8
         with:
-          name: win64-zip
+          name: ${{ env.PRODUCT_SLUG }}-Win64
           path: release-files
 
       - name: Create GitHub Release

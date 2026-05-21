@@ -89,18 +89,6 @@ public:
 
 	/** Set by SExecLocalPathWidget after PopulateGraph. Fires when the user clicks "Trace from here" on a row. */
 	TFunction<void(UEdGraphNode*)> RerootCallback;
-
-	/** Set by SExecLocalPathWidget after PopulateGraph. Fires when the user clicks "◈" on a row.
-	 *  Params: (OrigGroupIdx, OrigFuncIdx) in the original FExecFlowMap. */
-	TFunction<void(int32, int32)> CausalityCallback;
-
-	/** Indices into the original FExecFlowMap — used by causality highlighting. */
-	int32 OrigGroupIdx = INDEX_NONE;
-	int32 OrigFuncIdx  = INDEX_NONE;
-
-	/** Causality display state — set by SExecLocalPathWidget::ApplyCausalHighlighting. */
-	bool bIsInCausalChain     = false;
-	bool bIsDimmedByCausality = false;
 };
 
 // -----------------------------------------------------------------------

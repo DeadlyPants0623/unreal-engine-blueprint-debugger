@@ -15,7 +15,6 @@ First public release for **Unreal Engine 5.7** (editor-only plugin).
 - **Cluster overlay** — grouped background regions per Blueprint in the graph
 - **Re-root on click** — click a row to treat that step as the new centre of the trace
 - **Cycle handling** — back-edges are skipped; truncated nodes are marked when a cycle is detected
-- **Causality highlight (◈)** — highlight data-flow ancestors of a row; **Clear ◈** resets the view
 - **Click-to-jump** — open the source Blueprint node in the editor from any row
 - **Zoom-to-fit** — frame the full graph after each rebuild
 - Standalone plugin package (source and Win64 prebuilt zips on GitHub Releases; suitable for Fab submission)

@@ -63,25 +63,11 @@ struct FExecFlowEdge
 };
 
 // -----------------------------------------------------------------------
-//  A data-pin dependency between two entries already present in the flow map.
-//  Populated by FCausalityAnalyzer::PopulateDataEdges after tracing.
-// -----------------------------------------------------------------------
-struct FDataFlowEdge
-{
-	int32 SourceGroupIdx   = INDEX_NONE;
-	int32 SourceFuncIdx    = INDEX_NONE;
-	int32 TargetGroupIdx   = INDEX_NONE;
-	int32 TargetFuncIdx    = INDEX_NONE;
-	FName TargetInputPinName;
-};
-
-// -----------------------------------------------------------------------
 //  Complete graph result consumed by UExecFlowGraph.
 // -----------------------------------------------------------------------
 struct FExecFlowMap
 {
 	TArray<FExecBPGroup>  Groups;
 	TArray<FExecFlowEdge> Edges;
-	TArray<FDataFlowEdge> DataEdges;  // populated post-trace by FCausalityAnalyzer
 	int32 RootGroupIndex = INDEX_NONE;
 };

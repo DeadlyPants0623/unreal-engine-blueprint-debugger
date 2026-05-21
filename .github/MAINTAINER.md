@@ -18,13 +18,15 @@ The [release workflow](workflows/release.yml) fires on every `v*` tag and runs f
 
 | File | Purpose |
 |---|---|
-| `BPExecFlowViewer-{version}-source.zip` | Source-only zip for users who build from source |
-| `BPExecFlowViewer-{version}-Win64.zip` | Prebuilt Win64 plugin — also what you submit to Fab manually |
+| `Blueprint-Exec-Flow-Viewer-{version}-source.zip` | Source-only zip for users who build from source |
+| `Blueprint-Exec-Flow-Viewer-{version}-Win64.zip` | Prebuilt Win64 plugin — also what you submit to Fab manually |
+
+Zip names use the product slug **Blueprint Exec Flow Viewer** (`PRODUCT_SLUG` in [release.yml](workflows/release.yml)). The plugin still installs under `Plugins/BPExecFlowViewer/` inside the archive.
 
 ### Submitting to Fab
 
 Fab has no public upload API. After the release workflow completes:
-1. Download `BPExecFlowViewer-{version}-Win64.zip` from the GitHub Release.
+1. Download `Blueprint-Exec-Flow-Viewer-{version}-Win64.zip` from the GitHub Release.
 2. Log in to [fab.com](https://www.fab.com) and submit the zip through the product dashboard.
 
 ### Testing the workflow without tagging

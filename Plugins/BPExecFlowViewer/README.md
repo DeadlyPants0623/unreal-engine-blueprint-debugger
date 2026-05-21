@@ -12,8 +12,8 @@ Visualize **upstream and downstream Blueprint execution flow** from any node —
 
 - **Exec-flow map** — callers (left), root (centre), callees (right), with route labels (`Branch: True`, `IsValid: Valid`, `Exec`, …)
 - **Cross-Blueprint tracing** — follows `CallFunction` into other Blueprint assets when resolvable via the Asset Registry
-- **Causality highlight** — click the **◈** button on a row to dim unrelated nodes and highlight data/exec ancestors; **Clear ◈** resets
 - **Click-to-jump** — click any row to open the source node in the Blueprint Editor
+- **Re-root (→)** — click **→** on a row to re-trace with that step as the new centre
 - **Depth controls** — backward and forward depth **0–32** (defaults: 2 / 4)
 - **Zoom-to-fit** — graph frames all nodes after each rebuild
 
@@ -25,7 +25,7 @@ Requires **UE 5.7** and a **C++ project** (or a one-time “Add C++ Class” so 
 
 ### From GitHub Releases (recommended)
 
-1. Open [Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) and download the latest **`BPExecFlowViewer-*-source.zip`** (or **`*-Win64.zip`** for a prebuilt Win64 editor build when available).
+1. Open [Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) and download the latest **`Blueprint-Exec-Flow-Viewer-*-source.zip`** (or **`Blueprint-Exec-Flow-Viewer-*-Win64.zip`** for a prebuilt Win64 editor build when available).
 2. Extract into your project so you have `YourProject/Plugins/BPExecFlowViewer/` (the folder must contain `BPExecFlowViewer.uplugin`). Do **not** nest an extra folder level.
 3. Open the project in Unreal Engine 5.7.
 4. **Edit → Plugins** → search **Blueprint Exec Flow Viewer** → **Enable** → restart when prompted.
@@ -62,7 +62,6 @@ The **Exec Flow** nomad tab opens (or focuses) and populates on the **first** cl
 | Backward Depth | 2 | Hops upstream toward callers |
 | Forward Depth | 4 | Hops downstream toward callees |
 | Rebuild | — | Re-trace after changing depth |
-| Clear ◈ | — | Clear causality highlight (visible while active) |
 
 ---
 
@@ -95,7 +94,37 @@ The **Exec Flow** nomad tab opens (or focuses) and populates on the **first** cl
 - **Cross-Blueprint** — depends on Asset Registry / compile state; some targets may be missing.
 - **Macros, interfaces, latent/async, delegates** — paths may truncate or omit.
 - **Cycles** — back-edges are skipped; affected nodes are marked cycle-truncated.
-- **Causality ◈** — static data-pin influences, not guaranteed runtime causality.
+
+---
+
+## FAQ
+
+### How do I use this plugin?
+
+1. Enable **Blueprint Exec Flow Viewer** under **Edit → Plugins** (UE **5.7**), restart if prompted, and let the editor compile on first use if you installed from source.
+2. Open any Blueprint in the **Blueprint Editor**.
+3. **Right-click** a node on the exec chain (e.g. a function call or event) and choose **View Exec Flow**.
+4. The **Exec Flow** nomad tab opens with your node in the **centre** (gold), callers on the **left** (blue), and callees on the **right** (green).
+5. Adjust **Backward Depth** / **Forward Depth** (defaults **2** / **4**), then click **Rebuild** to widen or narrow the trace.
+6. **Click any row** in a card to jump to that node in the Blueprint Editor, or click **→** on a row to re-trace from that step as the new root.
+
+See [Usage](#usage) and [Reading the graph](#reading-the-graph) above for panel details and badge meanings.
+
+### Why don’t I see **View Exec Flow** when I right-click a node?
+
+The menu entry only appears on nodes that participate in execution flow — typically nodes with **Exec** pins (function calls, events, macros, and similar). Pure data nodes (variables, math, getters) have no exec path to trace, so the option is omitted. If you expected a node to qualify, try right-clicking a connected **Exec** pin or a `CallFunction` / `Event` node upstream or downstream of it.
+
+### Does this trace runtime execution during Play-In-Editor?
+
+No. The viewer analyzes **static graph topology** in the editor. It shows which nodes *can* run before and after your selection along exec wires, not what actually ran in a given PIE session. For runtime debugging you still need breakpoints, logging, or a dedicated runtime tracer.
+
+### Why is a cross-Blueprint function missing from the graph?
+
+Cross-Blueprint hops rely on the **Asset Registry** and a resolvable target Blueprint (usually after the callee has been compiled at least once). Renamed assets, broken references, interface-only calls, or Blueprints not yet indexed can leave a gap. Increase **Forward Depth** and click **Rebuild**; if the callee still does not appear, open that Blueprint, compile it, then trace again from your root node.
+
+### Do I need a C++ project? The plugin won’t enable or compile.
+
+Yes for the **source** distribution: Unreal must compile the editor module, which requires a **C++ project** (or adding any C++ class once so UBT generates project files). Blueprint-only projects cannot build third-party editor plugins from source. If you use a **prebuilt Win64** release zip, you still need a compatible **UE 5.7** editor and must enable the plugin under **Edit → Plugins**, then restart when prompted.
 
 ---
 

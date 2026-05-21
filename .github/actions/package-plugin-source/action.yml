@@ -1,10 +1,14 @@
 name: Package plugin source
-description: Zip BPExecFlowViewer source (same exclusions as release / CI)
+description: Zip Blueprint Exec Flow Viewer source (same exclusions as release / CI)
 
 inputs:
   version:
     description: Version string (use "ci" for CI smoke zip name)
     required: true
+  product_slug:
+    description: Filesystem-safe product name for release zip files (Blueprint Exec Flow Viewer)
+    required: false
+    default: Blueprint-Exec-Flow-Viewer
 
 outputs:
   zip_path:
@@ -18,10 +22,11 @@ runs:
       shell: bash
       run: |
         VERSION="${{ inputs.version }}"
+        SLUG="${{ inputs.product_slug }}"
         if [[ "$VERSION" == "ci" ]]; then
-          OUT="BPExecFlowViewer-ci-source.zip"
+          OUT="${SLUG}-ci-source.zip"
         else
-          OUT="BPExecFlowViewer-${VERSION}-source.zip"
+          OUT="${SLUG}-${VERSION}-source.zip"
         fi
         cd Plugins/BPExecFlowViewer
         zip -r "../../${OUT}" . \

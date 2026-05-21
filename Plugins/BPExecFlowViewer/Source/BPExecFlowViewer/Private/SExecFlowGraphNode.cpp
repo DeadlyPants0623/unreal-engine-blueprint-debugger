@@ -32,62 +32,21 @@ void SExecFlowGraphNode::UpdateGraphNode()
 	const FExecBPGroup& Group    = ExecNode->GroupData;
 
 	const FLinearColor TitleColor = ExecNode->GetNodeTitleColor();
+	static const FLinearColor BodyBgColor(0.08f, 0.08f, 0.08f, 0.92f);
+	static const FLinearColor FuncCardBgColor(0.04f, 0.04f, 0.04f, 0.85f);
 
-	// Causality color attributes — re-evaluated every paint pass.
-	TWeakObjectPtr<UExecFlowGraphNode> WeakNode(ExecNode);
-
-	auto BodyBgColor = TAttribute<FSlateColor>::CreateLambda(
-		[WeakNode]() -> FSlateColor
-		{
-			if (const UExecFlowGraphNode* N = WeakNode.Get())
-				if (N->bIsDimmedByCausality)
-					return FLinearColor(0.05f, 0.05f, 0.05f, 0.18f);
-			return FLinearColor(0.08f, 0.08f, 0.08f, 0.92f);
-		});
-
-	auto TitleBgColor = TAttribute<FSlateColor>::CreateLambda(
-		[WeakNode, TitleColor]() -> FSlateColor
-		{
-			if (const UExecFlowGraphNode* N = WeakNode.Get())
-			{
-				if (N->bIsDimmedByCausality)
-					return FLinearColor(TitleColor.R * 0.2f, TitleColor.G * 0.2f, TitleColor.B * 0.2f, 0.25f);
-				if (N->bIsInCausalChain)
-					return FLinearColor(0.80f, 0.62f, 0.04f, 1.0f);
-			}
-			return TitleColor;
-		});
-
-	auto TitleTextColor = TAttribute<FSlateColor>::CreateLambda(
-		[WeakNode]() -> FSlateColor
-		{
-			if (const UExecFlowGraphNode* N = WeakNode.Get())
-				if (N->bIsDimmedByCausality)
-					return FLinearColor(0.5f, 0.5f, 0.5f, 0.35f);
-			return FLinearColor::White;
-		});
-
-	auto FuncCardBgColor = TAttribute<FSlateColor>::CreateLambda(
-		[WeakNode]() -> FSlateColor
-		{
-			if (const UExecFlowGraphNode* N = WeakNode.Get())
-				if (N->bIsDimmedByCausality)
-					return FLinearColor(0.02f, 0.02f, 0.02f, 0.15f);
-			return FLinearColor(0.04f, 0.04f, 0.04f, 0.85f);
-		});
-
-	// Build function rows (with FuncIdx for causality button wiring)
+	// Build function rows
 	TSharedPtr<SWidget> FuncContent;
 	if (Group.Functions.Num() > 0)
 	{
 		TSharedPtr<SVerticalBox> FuncList;
 		SAssignNew(FuncList, SVerticalBox);
-		for (int32 FuncIdx = 0; FuncIdx < Group.Functions.Num(); ++FuncIdx)
+		for (const FExecFuncEntry& Entry : Group.Functions)
 		{
 			FuncList->AddSlot()
 			.AutoHeight()
 			.Padding(2.f, 1.f)
-			[ BuildFuncRow(Group.Functions[FuncIdx], FuncIdx) ];
+			[ BuildFuncRow(Entry) ];
 		}
 		FuncContent = FuncList;
 	}
@@ -128,13 +87,13 @@ void SExecFlowGraphNode::UpdateGraphNode()
 				[
 					SNew(SBorder)
 					.BorderImage(FAppStyle::GetBrush("Graph.Node.TitleBackground"))
-					.BorderBackgroundColor(TitleBgColor)
+					.BorderBackgroundColor(TitleColor)
 					.Padding(FMargin(12.f, 5.f, 12.f, 5.f))
 					[
 						SNew(STextBlock)
 						.Text(FText::FromString(Group.BlueprintName))
 						.TextStyle(FAppStyle::Get(), "Graph.Node.NodeTitle")
-						.ColorAndOpacity(TitleTextColor)
+						.ColorAndOpacity(FLinearColor::White)
 					]
 				]
 
@@ -163,7 +122,7 @@ void SExecFlowGraphNode::UpdateGraphNode()
 	SGraphNode::CreatePinWidgets();
 }
 
-TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry, int32 FuncIdx)
+TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry)
 {
 	// ---- Static data ----
 	FString KindIcon;
@@ -208,20 +167,8 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 		Tooltip += TEXT("Fan-out: ") + FString::Join(Entry.OutgoingRouteLabels, TEXT(", "));
 	}
 
-	// ---- Captures for lambdas ----
 	const TSharedPtr<FExecFuncEntry> EntryPtr = MakeShared<FExecFuncEntry>(Entry);
 	UExecFlowGraphNode* OwnerNode = CastChecked<UExecFlowGraphNode>(GraphNode);
-	TWeakObjectPtr<UExecFlowGraphNode> WeakNode(OwnerNode);
-
-	// Dim text when node is causally irrelevant
-	auto RowNameColor = TAttribute<FSlateColor>::CreateLambda(
-		[WeakNode, NameColor]() -> FSlateColor
-		{
-			if (const UExecFlowGraphNode* N = WeakNode.Get())
-				if (N->bIsDimmedByCausality)
-					return FLinearColor(NameColor.R * 0.35f, NameColor.G * 0.35f, NameColor.B * 0.35f, 0.35f);
-			return NameColor;
-		});
 
 	static const FLinearColor CardBorder(0.04f, 0.04f, 0.04f, 0.85f);
 
@@ -233,7 +180,7 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 			SNew(STextBlock)
 			.Text(FText::FromString(DisplayName))
 			.Font(NameFont)
-			.ColorAndOpacity(RowNameColor)
+			.ColorAndOpacity(NameColor)
 		];
 
 	// Navigate button — left-click jumps to the source node in the Blueprint Editor
@@ -262,7 +209,7 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 				SNew(STextBlock)
 				.Text(FText::FromString(KindIcon))
 				.Font(IconFont)
-				.ColorAndOpacity(RowNameColor)
+				.ColorAndOpacity(NameColor)
 			]
 
 			// Function name
@@ -280,46 +227,6 @@ TSharedRef<SWidget> SExecFlowGraphNode::BuildFuncRow(const FExecFuncEntry& Entry
 		[
 			NavigateButton
 		];
-
-	// Causality button — highlights data ancestors of this row in the flow graph
-	if (OwnerNode->CausalityCallback && EntryPtr->SourceNode.IsValid())
-	{
-		const int32 CapturedFuncIdx = FuncIdx;
-
-		auto CausalBtnColor = TAttribute<FSlateColor>::CreateLambda(
-			[WeakNode]() -> FSlateColor
-			{
-				if (const UExecFlowGraphNode* N = WeakNode.Get())
-					if (N->bIsInCausalChain)
-						return FLinearColor(1.0f, 0.72f, 0.08f); // amber when active
-				return FLinearColor(0.38f, 0.38f, 0.38f); // dim when idle
-			});
-
-		Row->AddSlot()
-		.AutoWidth()
-		.VAlign(VAlign_Center)
-		.Padding(2.f, 0.f, 0.f, 0.f)
-		[
-			SNew(SButton)
-			.ButtonStyle(FAppStyle::Get(), "NoBorder")
-			.ContentPadding(FMargin(3.f, 1.f))
-			.ToolTipText(FText::FromString(TEXT("Show data ancestors (causality chain)")))
-			.Cursor(EMouseCursor::Hand)
-			.OnClicked_Lambda([WeakNode, CapturedFuncIdx]() -> FReply
-			{
-				if (UExecFlowGraphNode* N = WeakNode.Get())
-					if (N->CausalityCallback)
-						N->CausalityCallback(N->OrigGroupIdx, N->OrigFuncIdx);
-				return FReply::Handled();
-			})
-			[
-				SNew(STextBlock)
-				.Text(FText::FromString(TEXT("◈"))) // ◈
-				.Font(FCoreStyle::GetDefaultFontStyle("Regular", 10))
-				.ColorAndOpacity(CausalBtnColor)
-			]
-		];
-	}
 
 	// Re-root button — re-traces the graph with this entry as the new root
 	if (OwnerNode->RerootCallback && EntryPtr->SourceNode.IsValid())
