@@ -37,7 +37,7 @@ jobs:
     needs: version
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Zip plugin source
         id: package
@@ -46,7 +46,7 @@ jobs:
           version: ${{ needs.version.outputs.version }}
 
       - name: Upload source artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: source-zip
           path: ${{ steps.package.outputs.zip_path }}
@@ -58,7 +58,7 @@ jobs:
     runs-on: self-hosted
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Setup MSVC
         uses: ilammy/msvc-dev-cmd@v1
@@ -100,7 +100,7 @@ jobs:
           "win64_zip=$archive" >> $env:GITHUB_OUTPUT
 
       - name: Upload Win64 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: win64-zip
           path: ${{ steps.zip.outputs.win64_zip }}
@@ -116,20 +116,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download source zip
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: source-zip
           path: release-files
 
       - name: Download Win64 zip (optional)
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         continue-on-error: true
         with:
           name: win64-zip
           path: release-files
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           generate_release_notes: true
           files: release-files/**
