@@ -1,6 +1,10 @@
-# Tag push (v*) or manual dispatch → source zip on every tag; Win64 zip optional via self-hosted Windows runner.
+# Tag push (v*) → source zip + Win64 package → GitHub Release.
+# Manual workflow_dispatch builds as "0.0.0-manual" (useful for testing the runner).
 #
-# Win64 job: UE_ROOT from Actions secret, runner env, or C:\Program Files\Epic Games\UE_5.7
+# Win64 job: set UE_ROOT via Actions secret, a runner env var,
+# or just install UE 5.7 at the default path — checked in that order.
+#
+# The Win64 zip produced here is also what you submit manually to Fab.
 
 name: Release
 
@@ -17,6 +21,10 @@ env:
   PLUGIN_FILE: Plugins/BPExecFlowViewer/BPExecFlowViewer.uplugin
 
 jobs:
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # 1. Resolve the version string from the tag (or "0.0.0-manual").
+  # ──────────────────────────────────────────────────────────────────────────
   version:
     name: Resolve version
     runs-on: ubuntu-latest
@@ -32,8 +40,11 @@ jobs:
             echo "version=0.0.0-manual" >> "$GITHUB_OUTPUT"
           fi
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # 2. Zip the plugin source (no UE install needed — runs on GitHub-hosted).
+  # ──────────────────────────────────────────────────────────────────────────
   package-source:
-    name: Package source
+    name: Package source zip
     needs: version
     runs-on: ubuntu-latest
     steps:
@@ -52,21 +63,25 @@ jobs:
           path: ${{ steps.package.outputs.zip_path }}
           if-no-files-found: error
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # 3. Compile + package the plugin for Win64 (requires self-hosted runner
+  #    with UE 5.7 installed). Uses RunUAT BuildPlugin via PackageForFab.bat.
+  #    This is intentionally NOT continue-on-error — a failed build blocks
+  #    the release rather than publishing an incomplete artifact.
+  # ──────────────────────────────────────────────────────────────────────────
   build-win64:
     name: Build Win64 package
-    needs: version
-    runs-on: self-hosted
-    continue-on-error: true
+    needs: [version, package-source]
+    runs-on: [self-hosted, windows]
+    continue-on-error: false
     steps:
-      - uses: actions/checkout@v6
-
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
+      - uses: actions/checkout@v4
         with:
-          arch: x64
+          lfs: true
 
-      # Do not set job env UE_ROOT from secrets alone — an unset secret becomes "" and
-      # wipes the runner machine's UE_ROOT. Order: secret → runner env → default UE 5.7 path.
+      # Resolve UE_ROOT: Actions secret → runner env var → default install path.
+      # Never set UE_ROOT directly from the secret at the job env level — an unset
+      # secret becomes "" and would wipe the runner machine's own UE_ROOT variable.
       - name: Resolve UE_ROOT
         shell: powershell
         run: |
@@ -80,8 +95,9 @@ jobs:
           "UE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "Using UE at: $root"
 
-      # RunUAT paths under GITHUB_WORKSPACE exceed Windows MAX_PATH (~260). Build on a short fixed path.
-      - name: Prepare package directory
+      # Build to a short fixed path — paths under actions-runner\_work\... easily
+      # exceed Windows MAX_PATH (260 chars) and UBT will fail silently.
+      - name: Prepare output directory
         shell: powershell
         run: |
           $out = 'C:\_ci\bpefv'
@@ -90,7 +106,7 @@ jobs:
           "PACKAGE_OUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "PACKAGE_OUT=$out"
 
-      - name: Build plugin (RunUAT)
+      - name: Build plugin (RunUAT BuildPlugin)
         shell: powershell
         run: |
           & "${{ github.workspace }}\Scripts\PackageForFab.bat"
@@ -114,13 +130,14 @@ jobs:
           path: ${{ steps.zip.outputs.win64_zip }}
           if-no-files-found: error
 
+  # ──────────────────────────────────────────────────────────────────────────
+  # 4. Create the GitHub Release and attach both zips.
+  #    Only runs on real tag pushes (not workflow_dispatch).
+  # ──────────────────────────────────────────────────────────────────────────
   publish-release:
     name: Publish GitHub Release
     needs: [version, package-source, build-win64]
-    if: >-
-      always() &&
-      startsWith(github.ref, 'refs/tags/v') &&
-      needs.package-source.result == 'success'
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - name: Download source zip
@@ -129,9 +146,8 @@ jobs:
           name: source-zip
           path: release-files
 
-      - name: Download Win64 zip (optional)
+      - name: Download Win64 zip
         uses: actions/download-artifact@v8
-        continue-on-error: true
         with:
           name: win64-zip
           path: release-files
@@ -141,4 +157,4 @@ jobs:
         with:
           generate_release_notes: true
           files: release-files/**
-          fail_on_unmatched_files: false
+          fail_on_unmatched_files: true
