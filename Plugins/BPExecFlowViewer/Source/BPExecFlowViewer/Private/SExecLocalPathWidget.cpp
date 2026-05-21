@@ -248,7 +248,8 @@ void SExecLocalPathWidget::Rebuild()
 		}
 	}
 
-	// Refresh the SGraphEditor	if (GraphContainer.IsValid())
+	// Refresh the SGraphEditor
+	if (GraphContainer.IsValid())
 	{
 		GraphContainer->SetContent(CreateGraphEditorWidget());
 		PostProcessWithGraphEditor();
@@ -276,7 +277,7 @@ TSharedRef<SWidget> SExecLocalPathWidget::CreateGraphEditorWidget()
 
 	SAssignNew(GraphEditor, SGraphEditor)
 		.AdditionalCommands(nullptr)
-		.IsEditable(true)
+		.IsEditable(false)
 		.Appearance(Appearance)
 		.GraphToEdit(FlowGraph);
 
@@ -346,6 +347,8 @@ void SExecLocalPathWidget::PostProcessWithGraphEditor()
 	}
 	GraphEditor->OnStraightenConnections();
 	GraphEditor->ClearSelectionSet();
+
+	GraphEditor->ZoomToFit(false);
 
 	FlowGraph->NotifyGraphChanged();
 }

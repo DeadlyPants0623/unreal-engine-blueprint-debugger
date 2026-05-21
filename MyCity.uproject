@@ -12,7 +12,7 @@
 	],
 	"Plugins": [
 		{
-			"Name": "BPHealthAnalyzer",
+			"Name": "BPExecFlowViewer",
 			"Enabled": true,
 			"TargetAllowList": [
 				"Editor"

@@ -1,4 +1,7 @@
-﻿# Unreal Engine project ignores
+﻿# Fab / UAT package output
+Packaged/
+
+# Unreal Engine project ignores
 Binaries/
 DerivedDataCache/
 Intermediate/

@@ -13,7 +13,10 @@
 
 void SExecFlowGraphNode::Construct(const FArguments& InArgs, UExecFlowGraphNode* InNode)
 {
-	check(InNode);
+	if (!ensureMsgf(InNode, TEXT("SExecFlowGraphNode: null graph node")))
+	{
+		return;
+	}
 	GraphNode = InNode;
 	UpdateGraphNode();
 }

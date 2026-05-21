@@ -1,0 +1,26 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0.0",
+	"FriendlyName": "Blueprint Exec Flow Viewer",
+	"Description": "Right-click any Blueprint node to visualize upstream and downstream execution flow, including cross-Blueprint calls, in a read-only dockable graph.",
+	"Category": "Editor",
+	"CreatedBy": "CJ",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"EngineVersion": "5.7.0",
+	"CanContainContent": false,
+	"IsBetaVersion": false,
+	"IsExperimentalVersion": false,
+	"Installed": false,
+	"EnabledByDefault": false,
+	"Modules": [
+		{
+			"Name": "BPExecFlowViewer",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
+		}
+	]
+}
