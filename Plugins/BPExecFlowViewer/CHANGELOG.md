@@ -1,27 +1,32 @@
 # Changelog
 
-All notable changes to the **Blueprint Exec Flow Viewer** plugin are documented here.
+All notable changes to **Blueprint Exec Flow Viewer** are listed here.
 
 ## [1.0.0] - 2026-05-21
 
+First public release for **Unreal Engine 5.7** (editor-only plugin).
+
 ### Added
 
-- Standalone `BPExecFlowViewer` plugin package for Fab distribution
-- Cross-Blueprint execution tracing (`FCrossBPExecTracer`)
-- Causality chain highlight (◈) with clear control
-- Dockable **Exec Flow** panel with depth controls (0–32) and Rebuild
-- Read-only flow graph with cluster overlay and click-to-jump
-- Context menu **View Exec Flow** on common K2 node types
-- `FilterPlugin.ini` for clean marketplace packaging
+- **View Exec Flow** — right-click any Blueprint node with execution pins to open a dockable **Exec Flow** panel
+- **Execution flow graph** — read-only map with callers on the left, your selected node in the centre, and callees on the right, including route labels (`Branch: True`, `IsValid: Valid`, `Exec`, and similar)
+- **Cross-Blueprint tracing** — follows `CallFunction` into other Blueprint assets when they can be resolved
+- **Depth controls** — adjust backward and forward trace depth (0–32; defaults 2 and 4) and **Rebuild** the graph
+- **Cluster overlay** — grouped background regions per Blueprint in the graph
+- **Re-root on click** — click a row to treat that step as the new centre of the trace
+- **Cycle handling** — back-edges are skipped; truncated nodes are marked when a cycle is detected
+- **Causality highlight (◈)** — highlight data-flow ancestors of a row; **Clear ◈** resets the view
+- **Click-to-jump** — open the source Blueprint node in the editor from any row
+- **Zoom-to-fit** — frame the full graph after each rebuild
+- Standalone plugin package (source and Win64 prebuilt zips on GitHub Releases; suitable for Fab submission)
 - MIT license
 
 ### Fixed
 
-- First-open tab race: graph populates without a second right-click (`PendingTargetNode`)
-- Flow graph editor set non-editable (`IsEditable(false)`)
-- `SExecFlowGraphNode` uses `ensureMsgf` instead of `check` on null node
+- Exec Flow tab populates on the first right-click (no second click required)
+- Flow graph cannot be edited accidentally (read-only graph editor)
+- Safer null checks in graph node UI (`ensureMsgf` instead of hard `check`)
 
 ### Changed
 
-- Zoom-to-fit after rebuild
-- Context menu entry uses plugin icon brush
+- Context menu entry uses the plugin toolbar icon
