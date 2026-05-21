@@ -22,6 +22,8 @@ GitHub-hosted runners do not have UE installed. To attach a Win64 zip:
 
 **Local package (same as CI):** run `Scripts\PackageForFab.bat`. Optional: `set PACKAGE_OUT=C:\path\to\output\BPExecFlowViewer`.
 
+**Windows path length:** CI builds to `C:\_ci\bpefv` because paths under `actions-runner\_work\…` often exceed 260 characters and UBT fails. Use a short `PACKAGE_OUT` locally if you hit the same error.
+
 ### One runner for multiple repos (organization)
 
 Repo-level runners only see jobs for that repo. For one `C:\actions-runner` across repos, register at the **organization** level (Org → Settings → Actions → Runners), then set `UE_ROOT` on each repo that uses the Win64 job.
