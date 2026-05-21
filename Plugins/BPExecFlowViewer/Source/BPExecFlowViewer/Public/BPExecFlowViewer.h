@@ -28,4 +28,6 @@ private:
 
 private:
 	TWeakPtr<SExecLocalPathWidget> ViewerWidgetPtr;
+	/** Set before first tab spawn; consumed in OnSpawnTab. */
+	TWeakObjectPtr<UEdGraphNode> PendingTargetNode;
 };

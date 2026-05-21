@@ -1,5 +1,8 @@
-﻿#include "BPExecFlowViewer.h"
+﻿// Copyright (c) 2026 CJ. See LICENSE in plugin root.
 
+#include "BPExecFlowViewer.h"
+
+#include "BPExecFlowViewerStyle.h"
 #include "SExecLocalPathWidget.h"
 #include "SExecFlowGraphNode.h"
 #include "EdGraphUtilities.h"
@@ -73,6 +76,8 @@ FToolMenuSection& FindOrAddNodeActionsSection(UToolMenu* Menu)
 
 void FBPExecFlowViewerModule::StartupModule()
 {
+	FBPExecFlowViewerStyle::Initialize();
+
 	// Register custom graph node factory for flow graph visualization
 	GExecLocalNodeFactory = MakeShared<FExecFlowGraphNodeFactory>();
 	FEdGraphUtilities::RegisterVisualNodeFactory(GExecLocalNodeFactory);
@@ -96,6 +101,12 @@ TSharedRef<SDockTab> FBPExecFlowViewerModule::OnSpawnTab(const FSpawnTabArgs& Ar
 {
 	TSharedRef<SExecLocalPathWidget> Widget = SNew(SExecLocalPathWidget);
 	ViewerWidgetPtr = Widget;
+
+	if (UEdGraphNode* Pending = PendingTargetNode.Get())
+	{
+		Widget->SetTargetNode(Pending);
+		PendingTargetNode.Reset();
+	}
 
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
@@ -164,7 +175,7 @@ void FBPExecFlowViewerModule::BuildContextMenuSection(UToolMenu* Menu)
 		TEXT("ViewLocalExecPath"),
 		LOCTEXT("ViewLocalExecPath",        "View Exec Flow"),
 		LOCTEXT("ViewLocalExecPathTooltip", "Show local execution flow for this node"),
-		FSlateIcon(),
+		FSlateIcon(FBPExecFlowViewerStyle::GetStyleSetName(), "BPExecFlowViewer.Icon16"),
 		FUIAction(FExecuteAction::CreateLambda(
 			[this, WeakNode]()
 			{
@@ -194,12 +205,18 @@ void FBPExecFlowViewerModule::BuildContextMenuSection(UToolMenu* Menu)
 
 void FBPExecFlowViewerModule::TriggerLocalFlowView(UEdGraphNode* Node)
 {
+	if (!Node)
+	{
+		return;
+	}
+
+	PendingTargetNode = Node;
 	FGlobalTabmanager::Get()->TryInvokeTab(FTabId(ExecFlowTabName));
 
-	TSharedPtr<SExecLocalPathWidget> Widget = ViewerWidgetPtr.Pin();
-	if (Widget.IsValid())
+	if (TSharedPtr<SExecLocalPathWidget> Widget = ViewerWidgetPtr.Pin())
 	{
 		Widget->SetTargetNode(Node);
+		PendingTargetNode.Reset();
 	}
 }
 
@@ -209,6 +226,11 @@ void FBPExecFlowViewerModule::TriggerLocalFlowView(UEdGraphNode* Node)
 
 void FBPExecFlowViewerModule::ShutdownModule()
 {
+	PendingTargetNode.Reset();
+	ViewerWidgetPtr.Reset();
+
+	FBPExecFlowViewerStyle::Shutdown();
+
 	if (GExecLocalNodeFactory.IsValid())
 	{
 		FEdGraphUtilities::UnregisterVisualNodeFactory(GExecLocalNodeFactory);

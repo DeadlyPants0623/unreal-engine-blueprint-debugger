@@ -19,11 +19,6 @@
 			"Name": "BPHealthAnalyzer",
 			"Type": "Editor",
 			"LoadingPhase": "Default"
-		},
-		{
-			"Name": "BPExecFlowViewer",
-			"Type": "Editor",
-			"LoadingPhase": "Default"
 		}
 	]
 }
