@@ -95,15 +95,24 @@ jobs:
         with:
           arch: x64
 
+      - name: Verify UE_ROOT
+        shell: powershell
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:UE_ROOT)) {
+            throw "UE_ROOT secret is empty. Set it in repo Settings -> Secrets -> Actions (e.g. C:\Program Files\Epic Games\UE_5.7)."
+          }
+          $uat = Join-Path $env:UE_ROOT "Engine\Build\BatchFiles\RunUAT.bat"
+          if (-not (Test-Path $uat)) {
+            throw "RunUAT not found at: $uat"
+          }
+          Write-Host "Using UE at: $env:UE_ROOT"
+
       - name: RunUAT BuildPlugin
         shell: powershell
         run: |
           $plugin = Join-Path $env:GITHUB_WORKSPACE "${{ env.PLUGIN_FILE }}"
           $out = Join-Path $env:GITHUB_WORKSPACE "_package\BPExecFlowViewer"
           $uat = Join-Path $env:UE_ROOT "Engine\Build\BatchFiles\RunUAT.bat"
-          if (-not (Test-Path $uat)) {
-            throw "RunUAT not found at $uat — check the UE_ROOT repository secret."
-          }
           & $uat BuildPlugin -Plugin="$plugin" -Package="$out" -TargetPlatforms=Win64
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
