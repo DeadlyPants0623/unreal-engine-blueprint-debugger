@@ -1,3 +1,5 @@
+// Copyright CJ 2026 All Rights Reserved.
+
 #include "SExecFlowGraphNode.h"
 
 #include "Widgets/SBoxPanel.h"

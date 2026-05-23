@@ -1,4 +1,6 @@
-﻿#include "SExecLocalPathWidget.h"
+﻿// Copyright CJ 2026 All Rights Reserved.
+
+#include "SExecLocalPathWidget.h"
 #include "CrossBPExecTracer.h"
 #include "ExecFlowGraph.h"
 #include "BPExecFlowViewer.h"

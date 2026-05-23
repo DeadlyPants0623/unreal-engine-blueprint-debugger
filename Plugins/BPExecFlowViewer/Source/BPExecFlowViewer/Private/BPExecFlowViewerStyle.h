@@ -1,3 +1,5 @@
+// Copyright CJ 2026 All Rights Reserved.
+
 #pragma once
 
 #include "Styling/SlateStyle.h"

@@ -20,7 +20,12 @@
 		{
 			"Name": "BPExecFlowViewer",
 			"Type": "Editor",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"PlatformAllowList": [
+				"Win64",
+				"Mac",
+				"Linux"
+			]
 		}
 	]
 }

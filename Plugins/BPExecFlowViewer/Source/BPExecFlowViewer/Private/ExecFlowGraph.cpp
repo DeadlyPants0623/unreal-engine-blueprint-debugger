@@ -1,4 +1,6 @@
-﻿#include "ExecFlowGraph.h"
+﻿// Copyright CJ 2026 All Rights Reserved.
+
+#include "ExecFlowGraph.h"
 
 #include "K2Node_FunctionEntry.h"
 #include "AssetRegistry/AssetDataTagMapSerializationDetails.h"
