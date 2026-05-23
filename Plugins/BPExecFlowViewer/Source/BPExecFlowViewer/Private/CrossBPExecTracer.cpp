@@ -1,4 +1,6 @@
-﻿#include "CrossBPExecTracer.h"
+﻿// Copyright CJ 2026 All Rights Reserved.
+
+#include "CrossBPExecTracer.h"
 #include "BPExecFlowViewer.h"
 
 #include "EdGraph/EdGraph.h"

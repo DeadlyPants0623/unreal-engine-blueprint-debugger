@@ -1,4 +1,6 @@
-﻿#include "SExecFlowClusterOverlay.h"
+﻿// Copyright CJ 2026 All Rights Reserved.
+
+#include "SExecFlowClusterOverlay.h"
 
 #include "GraphEditor.h"
 #include "Rendering/DrawElements.h"
