@@ -124,6 +124,11 @@ jobs:
           $archive = "${slug}-${version}-Win64.zip"
           $root = $env:PACKAGE_OUT
           if (-not (Test-Path -LiteralPath $root)) { throw "Package folder missing: $root" }
+          # Strip Unreal-generated folders that must not appear in a Fab submission
+          foreach ($folder in @('Build', 'Intermediate', 'Saved')) {
+            $target = Join-Path $root $folder
+            if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
+          }
           Compress-Archive -Path (Join-Path $root '*') -DestinationPath (Join-Path $env:GITHUB_WORKSPACE $archive) -Force
           "win64_zip=$archive" >> $env:GITHUB_OUTPUT
 

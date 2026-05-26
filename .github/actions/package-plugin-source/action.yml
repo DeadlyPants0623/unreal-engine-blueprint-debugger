@@ -31,7 +31,9 @@ runs:
         cd Plugins/BPExecFlowViewer
         zip -r "../../${OUT}" . \
           -x "Binaries/*" \
+          -x "Build/*" \
           -x "Intermediate/*" \
+          -x "Saved/*" \
           -x ".vs/*" \
           -x "*.sln" \
           -x "*.suo"
