@@ -1,10 +1,6 @@
-# Tag push (v*) → source zip + Win64 package → GitHub Release.
-# Manual workflow_dispatch builds as "0.0.0-manual" (useful for testing the runner).
-#
-# Win64 job: set UE_ROOT via Actions secret, a runner env var,
-# or just install UE 5.7 at the default path — checked in that order.
-#
-# The Win64 zip produced here is also what you submit manually to Fab.
+# Tag push (v*) → plugin source zip → GitHub Release (pre-release).
+# Same zip for end-user install and Fab project file link.
+# Manual workflow_dispatch packages as "0.0.0-manual" (artifact only, no release).
 
 name: Release
 
@@ -19,14 +15,10 @@ permissions:
 
 env:
   PLUGIN_FILE: Plugins/BPExecFlowViewer/BPExecFlowViewer.uplugin
-  # Filesystem-safe slug for release zips and Actions artifacts (FriendlyName: Blueprint Exec Flow Viewer)
   PRODUCT_SLUG: Blueprint-Exec-Flow-Viewer
 
 jobs:
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # 1. Resolve the version string from the tag (or "0.0.0-manual").
-  # ──────────────────────────────────────────────────────────────────────────
   version:
     name: Resolve version
     runs-on: ubuntu-latest
@@ -42,11 +34,8 @@ jobs:
             echo "version=0.0.0-manual" >> "$GITHUB_OUTPUT"
           fi
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # 2. Zip the plugin source (no UE install needed — runs on GitHub-hosted).
-  # ──────────────────────────────────────────────────────────────────────────
   package-source:
-    name: Package source zip
+    name: Package plugin zip
     needs: version
     runs-on: ubuntu-latest
     steps:
@@ -59,111 +48,30 @@ jobs:
           version: ${{ needs.version.outputs.version }}
           product_slug: ${{ env.PRODUCT_SLUG }}
 
-      - name: Upload source artifact
+      - name: Upload zip artifact
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ env.PRODUCT_SLUG }}-source
+          name: ${{ env.PRODUCT_SLUG }}
           path: ${{ steps.package.outputs.zip_path }}
           if-no-files-found: error
 
-  # ──────────────────────────────────────────────────────────────────────────
-  # 3. Compile + package the plugin for Win64 (requires self-hosted runner
-  #    with UE 5.7 installed). Uses RunUAT BuildPlugin via PackageForFab.bat.
-  #    This is intentionally NOT continue-on-error — a failed build blocks
-  #    the release rather than publishing an incomplete artifact.
-  # ──────────────────────────────────────────────────────────────────────────
-  build-win64:
-    name: Build Win64 package
-    needs: [version, package-source]
-    runs-on: [self-hosted, windows]
-    continue-on-error: false
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          lfs: true
-
-      # Resolve UE_ROOT: Actions secret → runner env var → default install path.
-      # Never set UE_ROOT directly from the secret at the job env level — an unset
-      # secret becomes "" and would wipe the runner machine's own UE_ROOT variable.
-      - name: Resolve UE_ROOT
-        shell: powershell
-        run: |
-          $root = '${{ secrets.UE_ROOT }}'
-          if ([string]::IsNullOrWhiteSpace($root)) { $root = $env:UE_ROOT }
-          if ([string]::IsNullOrWhiteSpace($root)) { $root = 'C:\Program Files\Epic Games\UE_5.7' }
-          $uat = Join-Path $root 'Engine\Build\BatchFiles\RunUAT.bat'
-          if (-not (Test-Path $uat)) {
-            throw "RunUAT not found at: $uat. Set Actions secret UE_ROOT, runner env UE_ROOT, or install UE 5.7 at the default path."
-          }
-          "UE_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Using UE at: $root"
-
-      # Build to a short fixed path — paths under actions-runner\_work\... easily
-      # exceed Windows MAX_PATH (260 chars) and UBT will fail silently.
-      - name: Prepare output directory
-        shell: powershell
-        run: |
-          $out = 'C:\_ci\bpefv'
-          if (Test-Path -LiteralPath $out) { Remove-Item -LiteralPath $out -Recurse -Force }
-          New-Item -ItemType Directory -Path $out -Force | Out-Null
-          "PACKAGE_OUT=$out" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "PACKAGE_OUT=$out"
-
-      - name: Build plugin (RunUAT BuildPlugin)
-        shell: powershell
-        run: |
-          & "${{ github.workspace }}\Scripts\PackageForFab.bat"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Zip Win64 package
-        id: zip
-        shell: powershell
-        run: |
-          $version = "${{ needs.version.outputs.version }}"
-          $slug = "${{ env.PRODUCT_SLUG }}"
-          $archive = "${slug}-${version}-Win64.zip"
-          $root = $env:PACKAGE_OUT
-          if (-not (Test-Path -LiteralPath $root)) { throw "Package folder missing: $root" }
-          # Strip Unreal-generated folders that must not appear in a Fab submission
-          foreach ($folder in @('Build', 'Intermediate', 'Saved')) {
-            $target = Join-Path $root $folder
-            if (Test-Path -LiteralPath $target) { Remove-Item -LiteralPath $target -Recurse -Force }
-          }
-          Compress-Archive -Path (Join-Path $root '*') -DestinationPath (Join-Path $env:GITHUB_WORKSPACE $archive) -Force
-          "win64_zip=$archive" >> $env:GITHUB_OUTPUT
-
-      - name: Upload Win64 artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.PRODUCT_SLUG }}-Win64
-          path: ${{ steps.zip.outputs.win64_zip }}
-          if-no-files-found: error
-
-  # ──────────────────────────────────────────────────────────────────────────
-  # 4. Create the GitHub Release and attach both zips.
-  #    Only runs on real tag pushes (not workflow_dispatch).
-  # ──────────────────────────────────────────────────────────────────────────
   publish-release:
     name: Publish GitHub Release
-    needs: [version, package-source, build-win64]
+    needs: [version, package-source]
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
-      - name: Download source zip
+      - name: Download plugin zip
         uses: actions/download-artifact@v8
         with:
-          name: ${{ env.PRODUCT_SLUG }}-source
-          path: release-files
-
-      - name: Download Win64 zip
-        uses: actions/download-artifact@v8
-        with:
-          name: ${{ env.PRODUCT_SLUG }}-Win64
+          name: ${{ env.PRODUCT_SLUG }}
           path: release-files
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          prerelease: true
+          make_latest: false
           generate_release_notes: true
           files: release-files/**
           fail_on_unmatched_files: true

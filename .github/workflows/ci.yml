@@ -15,7 +15,7 @@ on:
 
 jobs:
   package-source:
-    name: Package source (smoke)
+    name: Package plugin zip (smoke)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -26,8 +26,6 @@ jobs:
         with:
           version: ci
 
-      - name: Verify archive
+      - name: List archive contents
         shell: bash
-        run: |
-          test -f Plugins/BPExecFlowViewer/BPExecFlowViewer.uplugin
-          unzip -l "${{ steps.package.outputs.zip_path }}" | head -30
+        run: unzip -l "${{ steps.package.outputs.zip_path }}" | head -30

@@ -25,11 +25,11 @@ Requires **UE 5.7** and a **C++ project** (or a one-time “Add C++ Class” so 
 
 ### From GitHub Releases (recommended)
 
-1. Open [Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) and download the latest **`Blueprint-Exec-Flow-Viewer-*-source.zip`** (or **`Blueprint-Exec-Flow-Viewer-*-Win64.zip`** for a prebuilt Win64 editor build when available).
-2. Extract into your project so you have `YourProject/Plugins/BPExecFlowViewer/` (the folder must contain `BPExecFlowViewer.uplugin`). Do **not** nest an extra folder level.
+1. Open [Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) and download the latest **`Blueprint-Exec-Flow-Viewer-*.zip`**.
+2. Create `YourProject/Plugins/BPExecFlowViewer/` if needed, then extract the zip **into** that folder (you should see `BPExecFlowViewer.uplugin` there). Do **not** nest an extra folder level.
 3. Open the project in Unreal Engine 5.7.
 4. **Edit → Plugins** → search **Blueprint Exec Flow Viewer** → **Enable** → restart when prompted.
-5. Let the editor compile the plugin on first enable (source zip), or use the prebuilt binaries (Win64 zip).
+5. Let the editor compile the plugin on first enable.
 
 ### From Git (clone)
 
@@ -124,7 +124,7 @@ Cross-Blueprint hops rely on the **Asset Registry** and a resolvable target Blue
 
 ### Do I need a C++ project? The plugin won’t enable or compile.
 
-Yes for the **source** distribution: Unreal must compile the editor module, which requires a **C++ project** (or adding any C++ class once so UBT generates project files). Blueprint-only projects cannot build third-party editor plugins from source. If you use a **prebuilt Win64** release zip, you still need a compatible **UE 5.7** editor and must enable the plugin under **Edit → Plugins**, then restart when prompted.
+Yes: Unreal must compile the editor module, which requires a **C++ project** (or adding any C++ class once so UBT generates project files). Blueprint-only projects cannot build third-party editor plugins from source. After installing from GitHub Releases or Fab, enable the plugin under **Edit → Plugins** and restart when prompted.
 
 ---
 

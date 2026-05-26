@@ -1,5 +1,6 @@
 @echo off
-REM Package BPExecFlowViewer for Fab upload via RunUAT BuildPlugin.
+REM Local compile check via RunUAT BuildPlugin (verify before tagging a release).
+REM Do NOT upload the Packaged\ output to Fab — releases use the CI source zip.
 REM Set UE_ROOT to your UE 5.7 install before running.
 
 if "%UE_ROOT%"=="" set UE_ROOT=C:\Program Files\Epic Games\UE_5.7

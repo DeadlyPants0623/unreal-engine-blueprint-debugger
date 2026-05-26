@@ -2,34 +2,47 @@
 
 ## Creating a release
 
+Before tagging, verify the plugin compiles locally:
+
+```bat
+Scripts\PackageForFab.bat
+```
+
+(`PackageForFab.bat` runs `RunUAT BuildPlugin` for validation only — do **not** upload the `Packaged\` output to Fab.)
+
+Then tag and push:
+
 ```bash
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-The [release workflow](workflows/release.yml) publishes a **source zip** on every `v*` tag. A **Win64 zip** is optional (self-hosted runner; does not block the release if it fails or the runner is offline).
+The [release workflow](workflows/release.yml) publishes one zip on every `v*` tag:
 
-## Optional: Win64 prebuilt on releases
+- **File:** `Blueprint-Exec-Flow-Viewer-{version}.zip`
+- **Contents:** plugin source only (no `Binaries`, `Intermediate`, `Build`, or `Saved`)
+- **GitHub:** created as a **pre-release** — edit the release and uncheck pre-release when ready for “Latest”
 
-GitHub-hosted runners do not have UE installed. To attach a Win64 zip:
+Use the same zip for:
 
-1. Register your Windows PC as a **self-hosted** Actions runner ([GitHub docs](https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners)).
-2. Point CI at your UE install — **any one** of:
-   - Repo **Settings → Secrets → Actions** → `UE_ROOT` = `C:\Program Files\Epic Games\UE_5.7`
-   - Windows user/system env var `UE_ROOT` on the runner PC
-   - Default install path `C:\Program Files\Epic Games\UE_5.7` (no config if UE is there)
-3. Keep the runner **online** when you push a version tag if you want the Win64 asset.
+- GitHub Releases (user install: extract into `YourProject/Plugins/BPExecFlowViewer/`)
+- Fab “Project File Link” (direct asset URL from the release)
 
-**Local package (same as CI):** run `Scripts\PackageForFab.bat`. Optional: `set PACKAGE_OUT=C:\path\to\output\BPExecFlowViewer`.
+Example Fab/download URL:
 
-**Windows path length:** CI builds to `C:\_ci\bpefv` because paths under `actions-runner\_work\…` often exceed 260 characters and UBT fails. Use a short `PACKAGE_OUT` locally if you hit the same error.
+`https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases/download/v1.0.0/Blueprint-Exec-Flow-Viewer-1.0.0.zip`
 
-### One runner for multiple repos (organization)
+### Re-publish a tag (e.g. fix a failed release)
 
-Repo-level runners only see jobs for that repo. For one `C:\actions-runner` across repos, register at the **organization** level (Org → Settings → Actions → Runners), then set `UE_ROOT` on each repo that uses the Win64 job.
+```bash
+git tag -d v1.0.0
+git push origin :refs/tags/v1.0.0
+git tag v1.0.0
+git push origin v1.0.0
+```
 
-Without an org, you can run separate registrations (e.g. `C:\actions-runner` and `C:\actions-runner-bpexec`) — one `run.cmd` per repo.
+Delete the old GitHub Release for that tag first if it exists.
 
 ## CI
 
-[ci.yml](workflows/ci.yml) — on push/PR, zips plugin source on GitHub-hosted Linux (smoke test; no UE compile).
+[ci.yml](workflows/ci.yml) — on push/PR, zips plugin source on GitHub-hosted Linux and asserts the archive excludes build artifacts.

@@ -1,5 +1,5 @@
 name: Package plugin source
-description: Zip Blueprint Exec Flow Viewer source (same exclusions as release / CI)
+description: Zip BPExecFlowViewer for GitHub Release and Fab (no Binaries/Intermediate/Build/Saved)
 
 inputs:
   version:
@@ -24,9 +24,9 @@ runs:
         VERSION="${{ inputs.version }}"
         SLUG="${{ inputs.product_slug }}"
         if [[ "$VERSION" == "ci" ]]; then
-          OUT="${SLUG}-ci-source.zip"
+          OUT="${SLUG}-ci.zip"
         else
-          OUT="${SLUG}-${VERSION}-source.zip"
+          OUT="${SLUG}-${VERSION}.zip"
         fi
         cd Plugins/BPExecFlowViewer
         zip -r "../../${OUT}" . \
@@ -38,4 +38,17 @@ runs:
           -x "*.sln" \
           -x "*.suo"
         cd ../..
+        ZIP="${OUT}"
+
+        if unzip -l "${ZIP}" | grep -qE '(^|/)(Binaries|Intermediate|Build|Saved)/'; then
+          echo "ERROR: zip contains excluded build folders"
+          exit 1
+        fi
+        for required in BPExecFlowViewer.uplugin Source/; do
+          if ! unzip -l "${ZIP}" | grep -qE "(^|/)${required}"; then
+            echo "ERROR: zip missing required path: ${required}"
+            exit 1
+          fi
+        done
+
         echo "zip_path=${OUT}" >> "$GITHUB_OUTPUT"

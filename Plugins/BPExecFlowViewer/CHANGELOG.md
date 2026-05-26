@@ -17,7 +17,7 @@ First public release for **Unreal Engine 5.7** (editor-only plugin).
 - **Cycle handling** — back-edges are skipped; truncated nodes are marked when a cycle is detected
 - **Click-to-jump** — open the source Blueprint node in the editor from any row
 - **Zoom-to-fit** — frame the full graph after each rebuild
-- Standalone plugin package (source and Win64 prebuilt zips on GitHub Releases; suitable for Fab submission)
+- Standalone plugin source zip on GitHub Releases (same package for install and Fab listing)
 - MIT license
 
 ### Fixed
