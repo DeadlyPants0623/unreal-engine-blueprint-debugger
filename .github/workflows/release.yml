@@ -67,11 +67,20 @@ jobs:
           name: ${{ env.PRODUCT_SLUG }}
           path: release-files
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          prerelease: true
-          make_latest: false
-          generate_release_notes: true
-          files: release-files/**
-          fail_on_unmatched_files: true
+      - name: Recreate release and upload asset
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.ref_name }}"
+
+          # This workflow is often re-run by re-pushing tags (e.g. to rebuild the zip).
+          # Recreate the release to avoid flaky "tag_name already_exists" finalization
+          # errors seen with other release actions on reruns.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release delete "$TAG" --yes
+          fi
+
+          gh release create "$TAG" release-files/* \
+            --prerelease \
+            --generate-notes
