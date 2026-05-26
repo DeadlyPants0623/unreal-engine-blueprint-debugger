@@ -1,4 +1,4 @@
-﻿// Copyright (c) 2026 CJ. See LICENSE in plugin root.
+﻿// Copyright CJ 2026 All Rights Reserved.
 
 #include "BPExecFlowViewer.h"
 
