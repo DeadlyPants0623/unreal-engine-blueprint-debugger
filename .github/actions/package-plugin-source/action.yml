@@ -40,15 +40,18 @@ runs:
         cd ../..
         ZIP="${OUT}"
 
-        if unzip -l "${ZIP}" | grep -qE '(^|/)(Binaries|Intermediate|Build|Saved)/'; then
+        LIST="$(unzip -l "${ZIP}")"
+        if echo "${LIST}" | grep -qE '/Binaries/|/Intermediate/|/Build/|/Saved/'; then
           echo "ERROR: zip contains excluded build folders"
           exit 1
         fi
-        for required in BPExecFlowViewer.uplugin Source/; do
-          if ! unzip -l "${ZIP}" | grep -qE "(^|/)${required}"; then
-            echo "ERROR: zip missing required path: ${required}"
-            exit 1
-          fi
-        done
+        if ! echo "${LIST}" | grep -qF 'BPExecFlowViewer.uplugin'; then
+          echo "ERROR: zip missing BPExecFlowViewer.uplugin"
+          exit 1
+        fi
+        if ! echo "${LIST}" | grep -qF 'Source/'; then
+          echo "ERROR: zip missing Source/"
+          exit 1
+        fi
 
         echo "zip_path=${OUT}" >> "$GITHUB_OUTPUT"
