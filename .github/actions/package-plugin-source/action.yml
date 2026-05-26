@@ -34,6 +34,8 @@ runs:
           -x "Build/*" \
           -x "Intermediate/*" \
           -x "Saved/*" \
+          -x "CHANGELOG.md" \
+          -x "PRODUCT_HUNT.md" \
           -x ".vs/*" \
           -x "*.sln" \
           -x "*.suo"
@@ -53,5 +55,11 @@ runs:
           echo "ERROR: zip missing Source/"
           exit 1
         fi
+        for excluded in CHANGELOG.md PRODUCT_HUNT.md; do
+          if echo "${LIST}" | grep -qF "${excluded}"; then
+            echo "ERROR: zip must not contain ${excluded}"
+            exit 1
+          fi
+        done
 
         echo "zip_path=${OUT}" >> "$GITHUB_OUTPUT"
