@@ -8,6 +8,3 @@ Editor plugin for **Unreal Engine 5.7** — visualize Blueprint execution flow f
 |---|---|
 | Download | [GitHub Releases](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/releases) |
 | Support | [Issues](https://github.com/DeadlyPants0623/unreal-engine-blueprint-debugger/issues) |
-| License | MIT — [`Plugins/BPExecFlowViewer/LICENSE`](Plugins/BPExecFlowViewer/LICENSE) |
-
-This repo ships the plugin at `Plugins/BPExecFlowViewer/`. For releases and CI setup, see [`.github/MAINTAINER.md`](.github/MAINTAINER.md).
