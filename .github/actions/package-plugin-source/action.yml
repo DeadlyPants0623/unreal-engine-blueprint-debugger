@@ -55,6 +55,16 @@ runs:
           echo "ERROR: zip missing Source/"
           exit 1
         fi
+        for required in README.md Config/FilterPlugin.ini Resources/; do
+          if ! echo "${LIST}" | grep -qF "${required}"; then
+            echo "ERROR: zip missing ${required} (Fab / Marketplace package)"
+            exit 1
+          fi
+        done
+        if ! grep -qE '^/README\.md' Plugins/BPExecFlowViewer/Config/FilterPlugin.ini; then
+          echo "ERROR: Config/FilterPlugin.ini must whitelist /README.md for Fab"
+          exit 1
+        fi
         for excluded in CHANGELOG.md PRODUCT_HUNT.md; do
           if echo "${LIST}" | grep -qF "${excluded}"; then
             echo "ERROR: zip must not contain ${excluded}"

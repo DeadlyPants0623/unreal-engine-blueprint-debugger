@@ -21,7 +21,7 @@
 # Fab / UAT package output
 Packaged/
 
-# Plugin build artifacts (also covered by FilterPlugin.ini for releases)
+# Plugin build artifacts (also excluded via Config/FilterPlugin.ini for releases)
 Plugins/BPExecFlowViewer/Binaries/
 Plugins/BPExecFlowViewer/Intermediate/
 
